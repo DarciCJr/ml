@@ -193,6 +193,39 @@ window.ML = (() => {
     return results || [];
   }
 
+  /** O catálogo devolve o produto "seco": preço e vendas vêm do detalhe. */
+  async function enriquecer(lista, aoProgredir) {
+    const LOTE = 5;
+    const cheios = [];
+    for (let i = 0; i < lista.length; i += LOTE) {
+      const fatia = lista.slice(i, i + LOTE);
+      const res = await Promise.all(fatia.map(async (p) => {
+        if (p.price != null && p.sold_quantity != null) return p;   // já completo
+        try {
+          const d = await api(`/products/${p.id}`);
+          const bbw = d.buy_box_winner || {};
+          return {
+            ...p,
+            title: d.name || p.title,
+            price: bbw.price ?? p.price ?? null,
+            original_price: bbw.original_price ?? p.original_price ?? null,
+            sold_quantity: bbw.sold_quantity ?? d.sold_quantity ?? p.sold_quantity ?? null,
+            available_quantity: bbw.available_quantity ?? p.available_quantity ?? null,
+            shipping: bbw.shipping ?? p.shipping ?? null,
+            secure_thumbnail: p.secure_thumbnail || d.pictures?.[0]?.url || '',
+            permalink: bbw.permalink || p.permalink,
+            item_id: bbw.item_id ?? null
+          };
+        } catch {
+          return p;   // sem detalhe, mantém o que veio do catálogo
+        }
+      }));
+      cheios.push(...res);
+      aoProgredir?.(cheios.length, lista.length);
+    }
+    return cheios;
+  }
+
   /** Catálogo de produtos — alternativa quando /search é negado. */
   async function catalogo(q, categoria) {
     const p = new URLSearchParams({ site_id: SITE, status: 'active', limit: '50' });
@@ -225,7 +258,7 @@ window.ML = (() => {
 
   return {
     creds, tokens, ErroRede, PrecisaLogin, trocarCode, tokenValido, iniciarLogin,
-    categorias, maisVendidos, buscar, catalogo, linkAfiliado, REDIRECT,
+    categorias, maisVendidos, buscar, catalogo, enriquecer, linkAfiliado, REDIRECT,
     conectado: () => !!tokens.obter()
   };
 })();

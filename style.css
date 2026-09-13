@@ -160,3 +160,11 @@ textarea {
 #manual { display: grid; gap: 12px; margin-top: 20px; }
 #manual button { justify-self: start; }
 .fonte { color: var(--muted); font-weight: normal; font-size: .8rem; }
+.card { position: relative; }
+.posicao {
+  position: absolute; top: -8px; left: -8px; min-width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff; border-radius: 12px;
+  font-size: .75rem; font-weight: 700; padding: 0 7px;
+}
+.sem-dado { color: var(--muted); font-size: .85rem; }

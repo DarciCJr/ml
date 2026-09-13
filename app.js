@@ -48,21 +48,23 @@ function pintarConta() {
 function render(lista) {
   produtos = lista;
   $('contagem').textContent = `${lista.length} produto${lista.length === 1 ? '' : 's'}`;
-  $('lista').innerHTML = lista.map((it) => {
+  $('lista').innerHTML = lista.map((it, i) => {
     const link = ML.linkAfiliado(it.permalink);
     const temDesconto = it.original_price && it.original_price > it.price;
+    const semDados = it.price == null;
     return `
       <div class="card">
+        <span class="posicao">${i + 1}</span>
         <img src="${esc(it.secure_thumbnail || it.thumbnail || '')}" alt="" loading="lazy">
         <div class="card-corpo">
           <a class="titulo" href="${esc(link)}" target="_blank" rel="noopener">${esc(it.title)}</a>
-          <div class="preco">${brl(it.price)}
+          <div class="preco">${semDados ? '<span class="sem-dado">preço não informado</span>' : brl(it.price)}
             ${temDesconto ? `<span class="desconto">-${Math.round((1 - it.price / it.original_price) * 100)}%</span>
               <s>${brl(it.original_price)}</s>` : ''}
           </div>
           <div class="meta">
-            ${it.sold_quantity != null ? `${it.sold_quantity} vendidos · ` : ''}
-            estoque ${it.available_quantity ?? '—'}
+            ${it.sold_quantity != null ? `<b>${it.sold_quantity.toLocaleString('pt-BR')} vendidos</b>` : 'vendas não informadas'}
+            ${it.available_quantity != null ? ` · estoque ${it.available_quantity}` : ''}
             ${it.shipping?.free_shipping ? ' · frete grátis' : ''}
           </div>
           <div class="link-linha">
@@ -101,6 +103,16 @@ async function carregarProdutos({ propagar = false } = {}) {
     if (!lista) {
       throw ultimo || new Error('Nenhuma fonte de produtos respondeu.');
     }
+
+    // O catálogo vem sem preço nem vendas: completa item a item.
+    if (lista.some((p) => p.price == null || p.sold_quantity == null)) {
+      lista = await ML.enriquecer(lista, (feitos, total) =>
+        msg(`Carregando preços e vendas… ${feitos}/${total}`));
+    }
+
+    // Ranking: mais vendidos primeiro; sem dado de vendas vai para o fim.
+    lista.sort((a, b) => (b.sold_quantity ?? -1) - (a.sold_quantity ?? -1));
+
     $('fonte').textContent = `via ${usada}`;
     if (!lista.length) return msg('Nenhum produto encontrado. Tente outra categoria.', 'err');
     msg('');
