@@ -96,6 +96,21 @@ node scripts/mais-vendidos.mjs MLB1051 --json
 Usa `/highlights/{site}/category/{id}`, o endpoint oficial de destaques. A busca
 comum (`/sites/MLB/search`) **não** aceita ordenação por quantidade vendida.
 
+## Painel da API (`painel.html`)
+
+Consultas direto do navegador, sem precisar rodar nada localmente. Buscar
+produtos com filtros, ver os mais vendidos por categoria (`/highlights`),
+consultar item por ID, gerar os links de afiliado e exportar CSV/JSON.
+
+O access token é colado no próprio painel e fica em `sessionStorage` (só naquela
+aba). Como o token dura ~6h e a renovação exige o `client_secret` — que não pode
+ir para o navegador — o painel não renova sozinho: quando expirar, gere outro
+pelo teste de OAuth.
+
+**Depende de o Mercado Livre permitir chamadas de outro domínio (CORS).** Se o
+navegador bloquear, o painel avisa e o caminho passa a ser o job abaixo, rodando
+num servidor.
+
 ## Job de sincronização
 
 Busca produtos pelas regras, filtra por qualidade e grava num SQLite
