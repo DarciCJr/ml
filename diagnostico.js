@@ -74,9 +74,13 @@ async function testar(nome, path, opcoes = {}) {
     let idReal = null;
     try {
       const h = await (await fetch(`${API}${comToken('/highlights/MLB/category/MLB1051')}`)).json();
-      idReal = (h.content || []).find((x) => x.type === 'ITEM')?.id || null;
+      idReal = (h.content || []).find((x) => x?.id)?.id || null;
     } catch { /* sem id real, pula */ }
 
+    if (!idReal) {
+      testes.insertAdjacentHTML('beforeend',
+        '<p class="warn" style="margin-top:18px">Não consegui extrair um id dos destaques.</p>');
+    }
     if (idReal) {
       testes.insertAdjacentHTML('beforeend',
         `<p class="warn" style="margin-top:18px">Com um item real dos mais vendidos (${idReal}):</p>`);

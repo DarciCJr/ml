@@ -216,7 +216,11 @@ window.ML = (() => {
 
   async function maisVendidos(categoria, aoProgredir) {
     const { content } = await api(`/highlights/${SITE}/category/${categoria}`);
-    const ids = (content || []).filter((h) => h.type === 'ITEM').map((h) => h.id);
+    // O campo type nem sempre vem como 'ITEM'; filtrar por ele zerava a lista.
+    // Basta a entrada ter um id de item para ser utilizável.
+    const ids = (content || [])
+      .filter((h) => h?.id && (!h.type || h.type.toUpperCase() === 'ITEM'))
+      .map((h) => h.id);
     if (!ids.length) return [];
     const lista = await itens(ids, aoProgredir);
     // Os destaques já vêm em ordem de relevância de vendas: preserva-a para os
