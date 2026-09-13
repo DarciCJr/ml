@@ -95,3 +95,84 @@ node scripts/mais-vendidos.mjs MLB1051 --json
 
 Usa `/highlights/{site}/category/{id}`, o endpoint oficial de destaques. A busca
 comum (`/sites/MLB/search`) **não** aceita ordenação por quantidade vendida.
+
+## Job de sincronização
+
+Busca produtos pelas regras, filtra por qualidade e grava num SQLite
+(`produtos.db`). Sem dependências externas — usa o SQLite embutido no Node 22.
+
+### 1. Credenciais
+
+```bash
+cp .env.exemplo .env          # preencha ML_CLIENT_ID e ML_CLIENT_SECRET
+set -a && source .env && set +a
+
+# grave a resposta do /oauth/token (a que o curl do callback devolveu):
+node src/salvar-token.mjs '{"access_token":"APP_USR-...","refresh_token":"TG-...","expires_in":21600}'
+```
+
+O `access_token` dura ~6h; o job renova sozinho pelo `refresh_token` dez minutos
+antes de expirar, e também se a API devolver 401. `.ml-tokens.json` e `.env`
+estão no `.gitignore`.
+
+### 2. Regras
+
+Edite `regras.json`. Cada regra é `destaques` (mais vendidos da categoria) ou
+`busca` (filtros da busca do ML), mais filtros de qualidade aplicados localmente:
+
+| filtro | efeito |
+|---|---|
+| `preco_max` / `preco_min` | faixa de preço |
+| `vendidos_min` | mínimo de unidades vendidas |
+| `estoque_min` | estoque mínimo |
+| `frete_gratis` | só com frete grátis |
+| `nivel_vendedor_min` | `bronze`, `silver`, `gold`, `platinum` |
+
+Itens pausados ou sem estoque são sempre descartados.
+
+Preencha `afiliado_id` para que os links já saiam com seu identificador.
+
+### 3. Rodar
+
+```bash
+npm run sync          # uma vez
+npm run sync:loop     # de hora em hora, em primeiro plano
+```
+
+Agendado de verdade — systemd (Linux):
+
+```bash
+cp ml-sync.{service,timer} ~/.config/systemd/user/
+systemctl --user enable --now ml-sync.timer
+systemctl --user list-timers ml-sync.timer
+```
+
+Ou cron:
+
+```cron
+0 * * * * cd ~/ml && /usr/bin/node src/sync.mjs >> sync.log 2>&1
+```
+
+### 4. Consultar
+
+```bash
+npm run listar                     # disponíveis, mais vendidos primeiro
+node src/listar.mjs --regra celu   # filtra por regra
+npm run quedas                     # quem baixou de preço (usa o histórico)
+npm run execucoes                  # histórico do job, com erros
+node src/listar.mjs --json         # para alimentar seu site
+```
+
+### O que o banco guarda
+
+- `produtos` — item, preço, estoque, vendas, nível do vendedor, links. A flag
+  `disponivel` vira `0` quando o produto para de aparecer, em vez de apagar o
+  registro: o histórico é preservado e suas páginas escondem o que saiu do ar.
+- `precos` — uma linha por mudança de preço, que é o que alimenta `--quedas`.
+- `execucoes` — quando rodou, o que mudou e o erro, se houve.
+
+### Cuidados embutidos
+
+Pausa entre chamadas e backoff exponencial em 429/5xx, lotes de 20 no `/items`
+(limite do endpoint), cache de vendedor por execução e renovação automática de
+token. A tabela `execucoes` registra falhas em vez de deixá-las silenciosas.

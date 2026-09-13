@@ -1,3 +1,11 @@
 # Conteúdo em texto puro da área restrita — NUNCA versionar num repo público.
-# Só a versão cifrada (vantagens.enc.json) vai publicada.
+# Só a versão cifrada (*.enc.json) vai publicada.
 content/
+
+# Segredos e dados locais do job.
+.ml-tokens.json
+.env
+*.db
+*.db-wal
+*.db-shm
+node_modules/

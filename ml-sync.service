@@ -1,0 +1,11 @@
+# systemd: instale em ~/.config/systemd/user/ e ative com
+#   systemctl --user enable --now ml-sync.timer
+[Unit]
+Description=Sincroniza produtos do Mercado Livre
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/ml
+EnvironmentFile=%h/ml/.env
+ExecStart=/usr/bin/node src/sync.mjs

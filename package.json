@@ -1,0 +1,16 @@
+{
+  "name": "ml-afiliados",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sincroniza produtos do Mercado Livre para um banco local, para uso com afiliados.",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "sync": "node src/sync.mjs",
+    "sync:loop": "node src/sync.mjs --loop",
+    "listar": "node src/listar.mjs",
+    "quedas": "node src/listar.mjs --quedas",
+    "execucoes": "node src/listar.mjs --execucoes",
+    "mais-vendidos": "node scripts/mais-vendidos.mjs"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "afiliado_id": "",
+  "regras": [
+    {
+      "nome": "eletro-mais-vendidos",
+      "tipo": "destaques",
+      "categoria": "MLB5726",
+      "filtros": { "preco_max": 1500, "frete_gratis": false, "nivel_vendedor_min": "gold" }
+    },
+    {
+      "nome": "celulares-ate-2000",
+      "tipo": "busca",
+      "limite": 50,
+      "busca": { "category": "MLB1051", "price": "*-2000", "shipping": "free", "condition": "new" },
+      "filtros": { "vendidos_min": 10, "nivel_vendedor_min": "gold" }
+    }
+  ]
+}
