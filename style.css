@@ -159,3 +159,4 @@ textarea {
 }
 #manual { display: grid; gap: 12px; margin-top: 20px; }
 #manual button { justify-self: start; }
+.fonte { color: var(--muted); font-weight: normal; font-size: .8rem; }

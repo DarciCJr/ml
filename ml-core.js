@@ -193,6 +193,26 @@ window.ML = (() => {
     return results || [];
   }
 
+  /** Catálogo de produtos — alternativa quando /search é negado. */
+  async function catalogo(q, categoria) {
+    const p = new URLSearchParams({ site_id: SITE, status: 'active', limit: '50' });
+    if (q) p.set('q', q);
+    if (categoria) p.set('category_id', categoria);
+    const { results } = await api(`/products/search?${p}`);
+    // O catálogo devolve um formato próprio; normaliza para o mesmo dos itens.
+    return (results || []).map((r) => ({
+      id: r.id,
+      title: r.name || r.title,
+      price: r.buy_box_winner?.price ?? r.price ?? null,
+      original_price: r.buy_box_winner?.original_price ?? null,
+      sold_quantity: r.buy_box_winner?.sold_quantity ?? null,
+      available_quantity: r.buy_box_winner?.available_quantity ?? null,
+      shipping: r.buy_box_winner?.shipping ?? null,
+      secure_thumbnail: r.pictures?.[0]?.url || r.pictures?.[0]?.secure_url || '',
+      permalink: r.permalink || `https://www.mercadolivre.com.br/p/${r.id}`
+    }));
+  }
+
   function linkAfiliado(permalink) {
     const id = creds.obter()?.afiliado?.trim();
     if (!id || !permalink) return permalink || '';
@@ -205,7 +225,7 @@ window.ML = (() => {
 
   return {
     creds, tokens, ErroRede, PrecisaLogin, trocarCode, tokenValido, iniciarLogin,
-    categorias, maisVendidos, buscar, linkAfiliado, REDIRECT,
+    categorias, maisVendidos, buscar, catalogo, linkAfiliado, REDIRECT,
     conectado: () => !!tokens.obter()
   };
 })();

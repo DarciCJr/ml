@@ -49,16 +49,45 @@ async function testar(nome, path, opcoes = {}) {
   let t = null;
   try { t = JSON.parse(localStorage.getItem('ml_tokens')); } catch { /* ignora */ }
   if (t?.access_token) {
+    const tk = encodeURIComponent(t.access_token);
+    const comToken = (p) => `${p}${p.includes('?') ? '&' : '?'}access_token=${tk}`;
+
     testes.insertAdjacentHTML('beforeend',
-      '<p class="warn" style="margin-top:18px">Com o token que já está salvo neste navegador:</p>');
-    r.cabecalho = await testar('Autenticado via cabeçalho', '/sites/MLB/search?q=celular&limit=3',
+      '<p class="warn" style="margin-top:18px">Com o token salvo, qual endpoint sua aplicação pode usar:</p>');
+
+    r.cabecalho = await testar('Cabeçalho Authorization', '/sites/MLB/search?q=celular&limit=3',
       { headers: { accept: 'application/json', Authorization: `Bearer ${t.access_token}` } });
-    r.url = await testar('Autenticado via URL',
-      `/sites/MLB/search?q=celular&limit=3&access_token=${encodeURIComponent(t.access_token)}`);
+    r.url = await testar('Token na URL (busca)', comToken('/sites/MLB/search?q=celular&limit=3'));
+    r.quemSou   = await testar('Minha conta', comToken('/users/me'));
+    r.cats      = await testar('Categorias', comToken('/sites/MLB/categories'));
+    r.catDetalhe= await testar('Detalhe de categoria', comToken('/categories/MLB1051'));
+    r.destaques2= await testar('Mais vendidos', comToken('/highlights/MLB/category/MLB1051'));
+    r.tendencias= await testar('Tendências de busca', comToken('/trends/MLB'));
+    r.catalogo  = await testar('Catálogo de produtos', comToken('/products/search?site_id=MLB&status=active&q=celular'));
+    r.dominio   = await testar('Descoberta por domínio', comToken('/sites/MLB/domain_discovery/search?q=celular'));
+    if (t.user_id) {
+      r.meusItens = await testar('Meus anúncios', comToken(`/users/${t.user_id}/items/search`));
+    }
   }
 
   let titulo, texto, cor;
-  if (r.url?.ok && !r.cabecalho?.ok) {
+  const fontes = [
+    ['a busca', r.url], ['os mais vendidos', r.destaques2],
+    ['o catálogo', r.catalogo], ['a descoberta por domínio', r.dominio]
+  ].filter(([, v]) => v?.ok).map(([n]) => n);
+
+  if (t?.access_token && fontes.length) {
+    titulo = 'Funciona — dá para listar produtos';
+    texto = `Sua aplicação tem acesso a: ${fontes.join(', ')}. ` +
+      'A tela de produtos pode usar essas fontes.';
+    cor = 'ok';
+  } else if (t?.access_token && r.quemSou?.ok) {
+    titulo = 'Token válido, mas sem acesso aos produtos';
+    texto = 'A conta autentica normalmente, porém o Mercado Livre recusa os ' +
+      'endpoints de listagem de produtos para esta aplicação. É uma permissão ' +
+      'que precisa ser liberada no painel de desenvolvedores.';
+    cor = 'err';
+  } else if (r.url?.ok && !r.cabecalho?.ok) {
     titulo = '4 — Funciona, mas só com o token na URL';
     texto = 'O cabeçalho Authorization é barrado pelo preflight do CORS, e o token ' +
       'na URL passa. A página já tenta as duas formas e guarda a que funcionar, ' +

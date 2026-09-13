@@ -79,19 +79,29 @@ async function carregarProdutos({ propagar = false } = {}) {
   const cat = $('categoria').value;
   msg(q ? `Buscando "${esc(q)}"…` : 'Carregando os mais vendidos…');
   try {
-    let lista;
-    if (q) {
-      lista = await ML.buscar(q, cat);
-    } else {
-      // /highlights costuma exigir login; a busca por categoria é o plano B.
+    // O ML libera endpoints diferentes por aplicação: tenta em ordem e usa o
+    // primeiro que responder, em vez de falhar no primeiro "forbidden".
+    const fontes = q
+      ? [['busca', () => ML.buscar(q, cat)],
+         ['catálogo', () => ML.catalogo(q, cat)]]
+      : [['mais vendidos', () => ML.maisVendidos(cat)],
+         ['busca', () => ML.buscar('', cat)],
+         ['catálogo', () => ML.catalogo('', cat)]];
+
+    let lista = null, usada = null, ultimo = null;
+    for (const [nome, fn] of fontes) {
       try {
-        lista = await ML.maisVendidos(cat);
+        const r = await fn();
+        if (r?.length) { lista = r; usada = nome; break; }
       } catch (err) {
-        if (!(err instanceof ML.PrecisaLogin) || !ML.conectado()) {
-          lista = await ML.buscar('', cat);
-        } else { throw err; }
+        ultimo = err;
+        if (err instanceof ML.ErroRede) throw err;
       }
     }
+    if (!lista) {
+      throw ultimo || new Error('Nenhuma fonte de produtos respondeu.');
+    }
+    $('fonte').textContent = `via ${usada}`;
     if (!lista.length) return msg('Nenhum produto encontrado. Tente outra categoria.', 'err');
     msg('');
     render(lista);
