@@ -143,3 +143,12 @@ button.link {
 .controles { display: flex; gap: 8px; flex-wrap: wrap; margin: 24px 0 4px; }
 .controles select { flex: 1 1 200px; min-width: 0; }
 .controles input { flex: 2 1 200px; min-width: 0; }
+
+/* ---- Diagnóstico ---- */
+.teste {
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 0; border-bottom: 1px solid var(--line); font-size: .9rem;
+}
+.t-nome { color: var(--muted); }
+.t-res { text-align: right; }
+.verde { color: #1d9a4f; } .amarelo { color: #b8860b; } .vermelho { color: #c0392b; }
