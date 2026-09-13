@@ -84,7 +84,8 @@ async function testar(nome, path, opcoes = {}) {
     if (idReal) {
       testes.insertAdjacentHTML('beforeend',
         `<p class="warn" style="margin-top:18px">Com um item real dos mais vendidos (${idReal}):</p>`);
-      r.itemLote  = await testar('Itens em lote', comToken(`/items?ids=${idReal}`));
+      r.itemBulk  = await testar('Itens em lote (bulk)', comToken(`/items/bulk?ids=${idReal}`));
+      r.itemLote  = await testar('Itens em lote (legado)', comToken(`/items?ids=${idReal}`));
       r.itemUnico = await testar('Item individual', comToken(`/items/${idReal}`));
       r.itemPreco = await testar('Preço do item', comToken(`/items/${idReal}/sale_price?context=channel_marketplace`));
     }
@@ -96,7 +97,8 @@ async function testar(nome, path, opcoes = {}) {
     ['o catálogo', r.catalogo], ['a descoberta por domínio', r.dominio]
   ].filter(([, v]) => v?.ok).map(([n]) => n);
 
-  const detalheItem = r.itemLote?.ok ? 'em lote'
+  const detalheItem = r.itemBulk?.ok ? 'em lote (bulk)'
+    : r.itemLote?.ok ? 'em lote (legado)'
     : r.itemUnico?.ok ? 'um a um'
     : r.itemPreco?.ok ? 'só o preço' : null;
 

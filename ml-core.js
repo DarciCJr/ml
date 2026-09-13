@@ -184,14 +184,23 @@ window.ML = (() => {
       const fatia = ids.slice(i, i + 20);
 
       if (!loteNegado) {
-        try {
-          const lote = await api(`/items?ids=${fatia.join(',')}`);
-          out.push(...lote.filter((r) => r.code === 200).map((r) => r.body));
+        // /items/bulk é o endpoint atual para lote (até 20 ids); /items?ids= é
+        // o antigo e vem sendo recusado. Tenta o novo e depois o legado.
+        let lote = null;
+        for (const rota of [`/items/bulk?ids=${fatia.join(',')}`,
+                            `/items?ids=${fatia.join(',')}`]) {
+          try { lote = await api(rota); break; } catch { /* tenta o próximo */ }
+        }
+        if (lote) {
+          // Respostas possíveis: [{code,body}] ou uma lista de itens direta.
+          const linhas = Array.isArray(lote) ? lote : (lote.body || lote.results || []);
+          out.push(...linhas
+            .map((r) => (r && r.body ? (r.code === 200 ? r.body : null) : r))
+            .filter(Boolean));
           aoProgredir?.(out.length, ids.length);
           continue;
-        } catch {
-          loteNegado = true;   // não insiste no lote nas próximas fatias
         }
+        loteNegado = true;   // não insiste no lote nas próximas fatias
       }
 
       const um = await Promise.all(fatia.map(async (id) => {
