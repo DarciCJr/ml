@@ -203,8 +203,30 @@ window.ML = (() => {
       const res = await Promise.all(fatia.map(async (p) => {
         if (p.price != null && p.sold_quantity != null) return p;   // já completo
         try {
-          const d = await api(`/products/${p.id}`);
-          const bbw = d.buy_box_winner || {};
+          let d = {}, bbw = {};
+          try {
+            d = await api(`/products/${p.id}`);
+            bbw = d.buy_box_winner || {};
+          } catch (err) {
+            falhas.push(`/products: ${err.message}`);
+          }
+
+          // Plano B de preço: a API de preços trabalha por item, não por produto.
+          // O campo price de /items está sendo descontinuado pelo ML, então
+          // usamos /sale_price, que é o caminho indicado na documentação.
+          const itemId = bbw.item_id || p.item_id;
+          if (bbw.price == null && itemId) {
+            try {
+              const sp = await api(`/items/${itemId}/sale_price?context=channel_marketplace`);
+              if (sp?.amount != null) {
+                bbw.price = sp.amount;
+                bbw.original_price = sp.regular_amount ?? null;
+              }
+            } catch (err) {
+              falhas.push(`/sale_price: ${err.message}`);
+            }
+          }
+
           return {
             ...p,
             title: d.name || p.title,
@@ -215,7 +237,7 @@ window.ML = (() => {
             shipping: bbw.shipping ?? p.shipping ?? null,
             secure_thumbnail: p.secure_thumbnail || d.pictures?.[0]?.url || '',
             permalink: bbw.permalink || p.permalink,
-            item_id: bbw.item_id ?? null
+            item_id: itemId ?? null
           };
         } catch (err) {
           falhas.push(err.message);
@@ -250,7 +272,9 @@ window.ML = (() => {
       available_quantity: r.buy_box_winner?.available_quantity ?? null,
       shipping: r.buy_box_winner?.shipping ?? null,
       secure_thumbnail: r.pictures?.[0]?.url || r.pictures?.[0]?.secure_url || '',
-      permalink: r.permalink || `https://www.mercadolivre.com.br/p/${r.id}`
+      permalink: r.permalink || `https://www.mercadolivre.com.br/p/${r.id}`,
+      // preservado para a API de preços, que trabalha por item e não por produto
+      item_id: r.buy_box_winner?.item_id ?? null
     }));
   }
 

@@ -121,9 +121,11 @@ async function carregarProdutos({ propagar = false } = {}) {
     if (lista.some((p) => p.price == null || p.sold_quantity == null)) {
       lista = await ML.enriquecer(lista, (feitos, total) =>
         msg(`Carregando preços e vendas… ${feitos}/${total}`));
-      if (lista.qtdFalhas) {
-        notaEnriquecimento = `Preço e vendas não vieram em ${lista.qtdFalhas} de ` +
-          `${lista.length} produtos — o Mercado Livre respondeu: ${esc(lista.motivoFalha)}`;
+      // Só avisa sobre o que continuou faltando depois de todas as tentativas.
+      const incompletos = lista.filter((x) => x.price == null).length;
+      if (incompletos) {
+        notaEnriquecimento = `${incompletos} de ${lista.length} produtos ficaram sem preço` +
+          (lista.motivoFalha ? ` — o Mercado Livre respondeu: ${esc(lista.motivoFalha)}` : '');
       }
     }
 
