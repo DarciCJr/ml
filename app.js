@@ -10,6 +10,13 @@ function msg(html, tipo = '') {
   $('status').innerHTML = html ? `<div class="box ${tipo}">${html}</div>` : '';
 }
 
+function detalhes() {
+  const t = window.ML_TENTATIVAS;
+  return t?.length
+    ? `<details><summary>Detalhes técnicos</summary><pre>${esc(t.join('\n'))}</pre></details>`
+    : '';
+}
+
 function explicar(err) {
   if (err instanceof ML.ErroRede) {
     return 'A chamada à API não completou (rede ou CORS).<br>' +
@@ -83,39 +90,50 @@ async function carregarProdutos({ propagar = false } = {}) {
   try {
     // O ML libera endpoints diferentes por aplicação: tenta em ordem e usa o
     // primeiro que responder, em vez de falhar no primeiro "forbidden".
+    const nomeCat = $('categoria').selectedOptions[0]?.textContent?.trim() || '';
     const fontes = q
       ? [['busca', () => ML.buscar(q, cat)],
          ['catálogo', () => ML.catalogo(q, cat)]]
       : [['mais vendidos', () => ML.maisVendidos(cat)],
          ['busca', () => ML.buscar('', cat)],
-         ['catálogo', () => ML.catalogo('', cat)]];
+         ['catálogo', () => ML.catalogo('', cat, nomeCat)]];
 
     let lista = null, usada = null, ultimo = null;
+    const tentativas = [];
     for (const [nome, fn] of fontes) {
       try {
         const r = await fn();
-        if (r?.length) { lista = r; usada = nome; break; }
+        if (r?.length) { lista = r; usada = nome; tentativas.push(`${nome}: ${r.length}`); break; }
+        tentativas.push(`${nome}: vazio`);
       } catch (err) {
+        tentativas.push(`${nome}: ${err.message}`);
         ultimo = err;
         if (err instanceof ML.ErroRede) throw err;
       }
     }
+    window.ML_TENTATIVAS = tentativas;
     if (!lista) {
       throw ultimo || new Error('Nenhuma fonte de produtos respondeu.');
     }
 
     // O catálogo vem sem preço nem vendas: completa item a item.
+    let notaEnriquecimento = '';
     if (lista.some((p) => p.price == null || p.sold_quantity == null)) {
       lista = await ML.enriquecer(lista, (feitos, total) =>
         msg(`Carregando preços e vendas… ${feitos}/${total}`));
+      if (lista.qtdFalhas) {
+        notaEnriquecimento = `Preço e vendas não vieram em ${lista.qtdFalhas} de ` +
+          `${lista.length} produtos — o Mercado Livre respondeu: ${esc(lista.motivoFalha)}`;
+      }
     }
 
     // Ranking: mais vendidos primeiro; sem dado de vendas vai para o fim.
     lista.sort((a, b) => (b.sold_quantity ?? -1) - (a.sold_quantity ?? -1));
 
     $('fonte').textContent = `via ${usada}`;
+    window.ML_NOTA = notaEnriquecimento;
     if (!lista.length) return msg('Nenhum produto encontrado. Tente outra categoria.', 'err');
-    msg('');
+    msg(window.ML_NOTA || '', window.ML_NOTA ? 'err' : '');
     render(lista);
   } catch (err) {
     if (propagar || err instanceof ML.PrecisaLogin) throw err;
@@ -157,12 +175,12 @@ async function iniciar() {
       // A API do ML hoje exige token em praticamente tudo: leve ao login,
       // mostrando o motivo real em vez de deixar a tela vazia.
       mostrarEtapa(ML.creds.obter() ? 'conectar' : 'setup');
-      msg(err instanceof ML.PrecisaLogin
+      msg((err instanceof ML.PrecisaLogin
         ? 'O Mercado Livre recusou a consulta sem login.'
-        : `Não consegui consultar sem login: ${explicar(err)}`, 'err');
+        : `Não consegui consultar sem login: ${explicar(err)}`) + detalhes(), 'err');
       return;
     }
-    msg(explicar(err), 'err');
+    msg(explicar(err) + detalhes(), 'err');
   }
 }
 

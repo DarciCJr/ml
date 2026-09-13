@@ -168,3 +168,5 @@ textarea {
   font-size: .75rem; font-weight: 700; padding: 0 7px;
 }
 .sem-dado { color: var(--muted); font-size: .85rem; }
+details { margin-top: 10px; }
+details pre { margin-top: 8px; font-size: .75rem; }

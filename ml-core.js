@@ -197,6 +197,7 @@ window.ML = (() => {
   async function enriquecer(lista, aoProgredir) {
     const LOTE = 5;
     const cheios = [];
+    const falhas = [];
     for (let i = 0; i < lista.length; i += LOTE) {
       const fatia = lista.slice(i, i + LOTE);
       const res = await Promise.all(fatia.map(async (p) => {
@@ -216,20 +217,27 @@ window.ML = (() => {
             permalink: bbw.permalink || p.permalink,
             item_id: bbw.item_id ?? null
           };
-        } catch {
+        } catch (err) {
+          falhas.push(err.message);
           return p;   // sem detalhe, mantém o que veio do catálogo
         }
       }));
       cheios.push(...res);
       aoProgredir?.(cheios.length, lista.length);
     }
+    cheios.motivoFalha = falhas.length ? falhas[0] : null;
+    cheios.qtdFalhas = falhas.length;
     return cheios;
   }
 
   /** Catálogo de produtos — alternativa quando /search é negado. */
-  async function catalogo(q, categoria) {
+  async function catalogo(q, categoria, palavraCategoria) {
     const p = new URLSearchParams({ site_id: SITE, status: 'active', limit: '50' });
-    if (q) p.set('q', q);
+    // O endpoint exige keywords (ou identificador/atributos); categoria sozinha
+    // não basta, então usamos o nome da categoria como termo.
+    const termo = (q || palavraCategoria || '').trim();
+    if (!termo) throw new Error('O catálogo exige uma palavra de busca.');
+    p.set('keywords', termo);
     if (categoria) p.set('category_id', categoria);
     const { results } = await api(`/products/search?${p}`);
     // O catálogo devolve um formato próprio; normaliza para o mesmo dos itens.
