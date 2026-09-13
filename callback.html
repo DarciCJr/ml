@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Callback OAuth - Mercado Livre</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Retorno da autorização</h1>
+  <div id="status"></div>
+
+  <section id="ok" hidden>
+    <label>Authorization code
+      <input id="code" readonly>
+    </label>
+    <button type="button" class="copy" data-copy="#code">Copiar code</button>
+
+    <h2>Trocar o code por um access_token</h2>
+    <p>Rode no seu terminal, substituindo <code>SEU_CLIENT_SECRET</code>:</p>
+    <pre id="curl"></pre>
+    <button type="button" class="copy" data-copy="#curl">Copiar comando</button>
+    <p class="warn">O <code>code</code> é de uso único e expira em poucos minutos.</p>
+  </section>
+
+  <p><a href="./">&larr; Voltar</a></p>
+</main>
+<script src="callback.js"></script>
+</body>
+</html>
