@@ -3,58 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Teste OAuth - Mercado Livre</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main>
-  <h1>Teste de API — Mercado Livre</h1>
-  <p class="lead">Página pública para usar como <code>redirect_uri</code> na sua aplicação do
-  <a href="https://developers.mercadolivre.com.br/pt_br/api-docs-pt-br" target="_blank" rel="noopener">Mercado Livre</a>.</p>
-
-  <div class="box">
-    <strong>Configure no painel do ML (Minhas aplicações):</strong>
-    <p>URI de redirect:</p>
-    <code class="redirect" id="redirect"></code>
-    <button type="button" class="copy" data-copy="#redirect">Copiar</button>
-  </div>
-
-  <form id="form">
-    <label>App ID (client_id)
-      <input id="clientId" required inputmode="numeric" placeholder="1234567890123456" autocomplete="off">
-    </label>
-
-    <label>Site
-      <select id="site">
-        <option value="https://auth.mercadolivre.com.br" selected>Brasil (MLB)</option>
-        <option value="https://auth.mercadolibre.com.ar">Argentina (MLA)</option>
-        <option value="https://auth.mercadolibre.com.mx">México (MLM)</option>
-        <option value="https://auth.mercadolibre.com.co">Colômbia (MCO)</option>
-        <option value="https://auth.mercadolibre.cl">Chile (MLC)</option>
-        <option value="https://auth.mercadolibre.com.uy">Uruguai (MLU)</option>
-      </select>
-    </label>
-
-    <label class="check">
-      <input type="checkbox" id="pkce" checked> Usar PKCE (S256) — recomendado
-    </label>
-
-    <button type="submit">Autorizar no Mercado Livre</button>
-  </form>
-
-  <p class="restricted"><a href="vantagens.html">Área restrita: vantagens da API para afiliados &rarr;</a></p>
-
-  <details>
-    <summary>Como funciona</summary>
-    <ol>
-      <li>Você é enviado para o login do Mercado Livre.</li>
-      <li>Após autorizar, o ML devolve um <code>code</code> nesta página de callback.</li>
-      <li>A página monta o <code>curl</code> de troca do <code>code</code> por <code>access_token</code>.</li>
-      <li>Você roda esse <code>curl</code> no seu terminal, informando o <code>client_secret</code>.</li>
-    </ol>
-    <p class="warn">O <code>client_secret</code> nunca é digitado nem armazenado aqui. Página estática, sem servidor e sem coleta de dados.</p>
-  </details>
-</main>
-<script src="app.js"></script>
+<main></main>
+<script src="gate.js" data-payload="index.enc.json" data-script="app.js"></script>
 </body>
 </html>

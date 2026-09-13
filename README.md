@@ -60,23 +60,38 @@ não envia nada para lugar nenhum: `client_id` fica em `localStorage` e o
 Para uso em produção, a troca do code por token precisa de um backend
 (ex.: uma função serverless) guardando o secret em variável de ambiente.
 
-## Área restrita (`vantagens.html`)
+## Área restrita — senha em todas as páginas
 
-Página sobre as vantagens da API para trabalho com afiliados, protegida por senha.
+Todas as páginas do site (`index`, `callback`, `vantagens`) são publicadas apenas
+como **conteúdo cifrado** (`*.enc.json`). Os arquivos `.html` são cascas vazias;
+`gate.js` pede a senha, deriva a chave (PBKDF2-SHA256, 310.000 iterações),
+descriptografa (AES-256-GCM) e só então injeta o conteúdo e carrega o script da
+página.
 
-Como o GitHub Pages é estático, não existe servidor para validar senha — uma
-checagem em JavaScript seria contornada em segundos com "ver código-fonte".
-Por isso o conteúdo é **criptografado** (PBKDF2-SHA256, 310.000 iterações →
-AES-256-GCM) e publicado apenas como texto cifrado em `vantagens.enc.json`.
-Sem a senha não há texto a ler, nem no código-fonte.
+Sem a senha não existe conteúdo a ler — nem no "ver código-fonte". A senha fica
+em `sessionStorage` durante a aba, então o redirect do OAuth não pede de novo.
 
 O texto em claro fica em `content/`, que está no `.gitignore` e **não deve ser
 versionado** enquanto o repositório for público.
 
-Para editar o conteúdo e republicar:
+Editar o conteúdo e republicar:
 
 ```bash
-node build/encrypt.mjs 'SUA_SENHA' content/vantagens.inner.html vantagens.enc.json
+# edite os arquivos em content/, depois:
+build/all.sh 'SUA_SENHA'
+git add -A && git commit -m "atualiza conteúdo" && git push
 ```
 
-Trocar a senha é só rodar o comando acima com a nova — o payload é regerado.
+Trocar a senha é rodar o mesmo comando com a nova.
+
+## Listar mais vendidos
+
+```bash
+export ML_TOKEN='APP_USR-...'          # token obtido no fluxo OAuth
+node scripts/mais-vendidos.mjs         # lista as categorias
+node scripts/mais-vendidos.mjs MLB1051 # destaques da categoria
+node scripts/mais-vendidos.mjs MLB1051 --json
+```
+
+Usa `/highlights/{site}/category/{id}`, o endpoint oficial de destaques. A busca
+comum (`/sites/MLB/search`) **não** aceita ordenação por quantidade vendida.
