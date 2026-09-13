@@ -10,11 +10,11 @@ const linha = (nome) => {
   return el.querySelector('.t-res');
 };
 
-async function testar(nome, path) {
+async function testar(nome, path, opcoes = {}) {
   const alvo = linha(nome);
   const inicio = Date.now();
   try {
-    const res = await fetch(`${API}${path}`, { headers: { accept: 'application/json' } });
+    const res = await fetch(`${API}${path}`, { headers: opcoes.headers || { accept: 'application/json' } });
     const ms = Date.now() - inicio;
     let amostra = '';
     try {
@@ -44,7 +44,42 @@ async function testar(nome, path) {
   r.item       = await testar('Consultar um produto',      '/items/MLB1234567890');
   r.destaques  = await testar('Mais vendidos (highlights)','/highlights/MLB/category/MLB1051');
 
+  // Se já há token guardado, testa as duas formas de autenticar: o cabeçalho
+  // Authorization (dispara preflight de CORS) e o token na URL (não dispara).
+  let t = null;
+  try { t = JSON.parse(localStorage.getItem('ml_tokens')); } catch { /* ignora */ }
+  if (t?.access_token) {
+    testes.insertAdjacentHTML('beforeend',
+      '<p class="warn" style="margin-top:18px">Com o token que já está salvo neste navegador:</p>');
+    r.cabecalho = await testar('Autenticado via cabeçalho', '/sites/MLB/search?q=celular&limit=3',
+      { headers: { accept: 'application/json', Authorization: `Bearer ${t.access_token}` } });
+    r.url = await testar('Autenticado via URL',
+      `/sites/MLB/search?q=celular&limit=3&access_token=${encodeURIComponent(t.access_token)}`);
+  }
+
   let titulo, texto, cor;
+  if (r.url?.ok && !r.cabecalho?.ok) {
+    titulo = '4 — Funciona, mas só com o token na URL';
+    texto = 'O cabeçalho Authorization é barrado pelo preflight do CORS, e o token ' +
+      'na URL passa. A página já tenta as duas formas e guarda a que funcionar, ' +
+      'então a listagem deve funcionar.';
+    cor = 'ok';
+  } else if (r.cabecalho?.ok || r.url?.ok) {
+    titulo = '5 — Autenticado, funcionando';
+    texto = 'A consulta autenticada respondeu. A tela de produtos deve listar normalmente.';
+    cor = 'ok';
+  } else if (t?.access_token && (r.cabecalho?.rede && r.url?.rede)) {
+    titulo = '6 — O navegador não consegue consultar autenticado';
+    texto = 'Nem o cabeçalho nem o token na URL passaram. Não há como consultar ' +
+      'direto do navegador: é preciso um intermediário (um servidor gratuito).';
+    cor = 'err';
+  } else if (t?.access_token) {
+    const st = r.url?.status || r.cabecalho?.status;
+    titulo = `7 — O token foi recusado (HTTP ${st})`;
+    texto = 'A conexão chega ao Mercado Livre, mas ele recusa o token. Pode estar ' +
+      'expirado, ou a aplicação não tem permissão para este recurso.';
+    cor = 'err';
+  } else
   if (r.busca.ok) {
     titulo = '1 — Funciona sem login';
     texto = 'O navegador conversa com a API e a busca é pública. A tela de produtos ' +

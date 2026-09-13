@@ -89,18 +89,51 @@ window.ML = (() => {
   /** Erro que indica: este endpoint exige login. */
   class PrecisaLogin extends Error {}
 
+  // O cabeçalho Authorization torna a requisição "não simples" e dispara o
+  // preflight do CORS, que o ML não responde. Mandar o token na URL evita o
+  // preflight. Guardamos o modo que funcionou para não repetir a tentativa.
+  const MODO = 'ml_auth_modo';
+  const modoSalvo = () => localStorage.getItem(MODO);
+
+  async function buscarComToken(path, token, modo) {
+    if (modo === 'query') {
+      const sep = path.includes('?') ? '&' : '?';
+      return fetch(`${API}${path}${sep}access_token=${encodeURIComponent(token)}`,
+        { headers: { accept: 'application/json' } });
+    }
+    return fetch(`${API}${path}`, {
+      headers: { accept: 'application/json', Authorization: `Bearer ${token}` }
+    });
+  }
+
   async function api(path, { jaRenovou = false } = {}) {
-    // Sem tokens guardados, tenta como chamada pública — boa parte da API
-    // do ML responde sem autenticação.
-    const headers = { accept: 'application/json' };
     const temToken = !!tokens.obter();
-    if (temToken) headers.Authorization = `Bearer ${await tokenValido()}`;
 
     let res;
-    try {
-      res = await fetch(`${API}${path}`, { headers });
-    } catch {
-      throw new ErroRede('bloqueio de CORS ou falha de rede');
+    if (!temToken) {
+      // Sem token: chamada simples, sem cabeçalho — não dispara preflight.
+      try {
+        res = await fetch(`${API}${path}`, { headers: { accept: 'application/json' } });
+      } catch {
+        throw new ErroRede('falha de rede');
+      }
+    } else {
+      const token = await tokenValido();
+      const ordem = modoSalvo() === 'query' ? ['query'] : ['header', 'query'];
+      let ultimoErro;
+      for (const modo of ordem) {
+        try {
+          res = await buscarComToken(path, token, modo);
+          if (modoSalvo() !== modo) localStorage.setItem(MODO, modo);
+          ultimoErro = null;
+          break;
+        } catch (err) {
+          ultimoErro = err;   // rede/CORS: tenta o próximo modo
+        }
+      }
+      if (ultimoErro) {
+        throw new ErroRede('a API não aceitou a chamada autenticada pelo navegador');
+      }
     }
 
     if ((res.status === 401 || res.status === 403) && !temToken) {
