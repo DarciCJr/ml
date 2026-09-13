@@ -126,3 +126,20 @@ button.secundario { background: transparent; color: var(--accent); border: 1px s
 .grid2 { align-items: end; }
 .grid2 > label { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
 .grid2 > label > :is(input, select) { margin-top: auto; }
+
+/* ---- Tela de produtos ---- */
+.topo { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.topo h1 { margin-bottom: 4px; }
+.conta { font-size: .85rem; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.ok-dot { width: 8px; height: 8px; border-radius: 50%; background: #1d9a4f; display: inline-block; }
+button.link {
+  background: none; border: 0; color: var(--accent); padding: 0;
+  font-size: .85rem; text-decoration: underline; cursor: pointer;
+}
+#etapaSetup, #etapaConectar { display: grid; gap: 14px; }
+#etapaSetup button, #etapaConectar button { justify-self: start; }
+#etapaSetup h2 { margin: 0; padding: 0; border: 0; font-size: 1.1rem; }
+#etapaSetup .lead, #etapaConectar .lead { margin: 0; }
+.controles { display: flex; gap: 8px; flex-wrap: wrap; margin: 24px 0 4px; }
+.controles select { flex: 1 1 200px; min-width: 0; }
+.controles input { flex: 2 1 200px; min-width: 0; }

@@ -96,20 +96,32 @@ node scripts/mais-vendidos.mjs MLB1051 --json
 Usa `/highlights/{site}/category/{id}`, o endpoint oficial de destaques. A busca
 comum (`/sites/MLB/search`) **não** aceita ordenação por quantidade vendida.
 
-## Painel da API (`painel.html`)
+## Tela de produtos (a página principal)
 
-Consultas direto do navegador, sem precisar rodar nada localmente. Buscar
-produtos com filtros, ver os mais vendidos por categoria (`/highlights`),
-consultar item por ID, gerar os links de afiliado e exportar CSV/JSON.
+Fluxo completo no navegador, sem precisar rodar nada:
 
-O access token é colado no próprio painel e fica em `sessionStorage` (só naquela
-aba). Como o token dura ~6h e a renovação exige o `client_secret` — que não pode
-ir para o navegador — o painel não renova sozinho: quando expirar, gere outro
-pelo teste de OAuth.
+1. Na primeira vez, informe o **App ID** e a **Secret Key** do painel do ML
+   (mais o seu identificador de afiliado, se tiver).
+2. Clique em conectar e autorize na tela do Mercado Livre.
+3. A página troca o código pelo token sozinha e já lista os produtos.
+
+A partir daí é só escolher a categoria ou buscar por palavra. Cada produto traz
+o link de afiliado pronto, com botão de copiar; dá para copiar todos de uma vez
+ou baixar CSV.
+
+O token dura ~6h e **se renova sozinho** pelo `refresh_token`. Credenciais e
+tokens ficam apenas no `localStorage` do seu navegador e são enviados só para a
+API do Mercado Livre.
+
+> **Sobre guardar a Secret Key no navegador:** é o que permite renovar o token
+> sem intervenção. Ela não vai para o GitHub nem para servidor nenhum, mas fica
+> legível para quem tiver acesso ao seu navegador e à senha da página. Se
+> preferir não correr esse risco, use o job abaixo num servidor — lá o segredo
+> fica em variável de ambiente. A chave é revogável no painel do ML.
 
 **Depende de o Mercado Livre permitir chamadas de outro domínio (CORS).** Se o
-navegador bloquear, o painel avisa e o caminho passa a ser o job abaixo, rodando
-num servidor.
+navegador bloquear, a página avisa com todas as letras e o caminho passa a ser
+o job abaixo.
 
 ## Job de sincronização
 

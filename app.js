@@ -1,64 +1,167 @@
-const REDIRECT_URI = new URL('callback.html', location.href).href;
-document.getElementById('redirect').textContent = REDIRECT_URI;
+const $ = (id) => document.getElementById(id);
+const brl = (n) => typeof n === 'number'
+  ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-const saved = JSON.parse(localStorage.getItem('ml_cfg') || '{}');
-if (saved.clientId) document.getElementById('clientId').value = saved.clientId;
-if (saved.site) document.getElementById('site').value = saved.site;
-if (saved.pkce === false) document.getElementById('pkce').checked = false;
+let produtos = [];
 
-function randomString(bytes = 32) {
-  const a = new Uint8Array(bytes);
-  crypto.getRandomValues(a);
-  return base64url(a);
+function msg(html, tipo = '') {
+  $('status').innerHTML = html ? `<div class="box ${tipo}">${html}</div>` : '';
 }
 
-function base64url(buf) {
-  const bin = String.fromCharCode(...new Uint8Array(buf));
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-async function challenge(verifier) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  return base64url(digest);
-}
-
-document.getElementById('form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const clientId = document.getElementById('clientId').value.trim();
-  const site = document.getElementById('site').value;
-  const usePkce = document.getElementById('pkce').checked;
-
-  localStorage.setItem('ml_cfg', JSON.stringify({ clientId, site, pkce: usePkce }));
-
-  const state = randomString(16);
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id: clientId,
-    redirect_uri: REDIRECT_URI,
-    state
-  });
-
-  const session = { clientId, state, redirectUri: REDIRECT_URI };
-
-  if (usePkce) {
-    const verifier = randomString(32);
-    session.verifier = verifier;
-    params.set('code_challenge', await challenge(verifier));
-    params.set('code_challenge_method', 'S256');
+function explicar(err) {
+  if (err instanceof ML.ErroRede) {
+    return 'O navegador bloqueou a chamada à API do Mercado Livre (CORS) ou a rede falhou.' +
+      '<br>Se o bloqueio persistir, a consulta pelo navegador não é possível e o caminho ' +
+      'é rodar o job <code>src/sync.mjs</code> num servidor.';
   }
+  return esc(err.message);
+}
 
-  sessionStorage.setItem('ml_auth', JSON.stringify(session));
-  location.href = `${site}/authorization?${params.toString()}`;
+function mostrarEtapa(etapa) {
+  for (const e of ['Setup', 'Conectar', 'Produtos']) {
+    $(`etapa${e}`).hidden = e.toLowerCase() !== etapa;
+  }
+}
+
+function pintarConta() {
+  const c = ML.creds.obter();
+  $('statusConta').innerHTML = ML.conectado()
+    ? `<span class="ok-dot"></span>conectado
+       <button id="btnSair" class="link">sair</button>
+       <button id="btnCreds" class="link">credenciais</button>`
+    : c ? `<button id="btnCreds" class="link">credenciais</button>` : '';
+  $('btnSair')?.addEventListener('click', () => {
+    ML.tokens.limpar();
+    iniciar();
+  });
+  $('btnCreds')?.addEventListener('click', () => {
+    const c = ML.creds.obter() || {};
+    $('clientId').value = c.clientId || '';
+    $('clientSecret').value = c.clientSecret || '';
+    $('afiliado').value = c.afiliado || '';
+    mostrarEtapa('setup');
+  });
+}
+
+// ---- produtos ----
+function render(lista) {
+  produtos = lista;
+  $('contagem').textContent = `${lista.length} produto${lista.length === 1 ? '' : 's'}`;
+  $('lista').innerHTML = lista.map((it) => {
+    const link = ML.linkAfiliado(it.permalink);
+    const temDesconto = it.original_price && it.original_price > it.price;
+    return `
+      <div class="card">
+        <img src="${esc(it.secure_thumbnail || it.thumbnail || '')}" alt="" loading="lazy">
+        <div class="card-corpo">
+          <a class="titulo" href="${esc(link)}" target="_blank" rel="noopener">${esc(it.title)}</a>
+          <div class="preco">${brl(it.price)}
+            ${temDesconto ? `<span class="desconto">-${Math.round((1 - it.price / it.original_price) * 100)}%</span>
+              <s>${brl(it.original_price)}</s>` : ''}
+          </div>
+          <div class="meta">
+            ${it.sold_quantity != null ? `${it.sold_quantity} vendidos · ` : ''}
+            estoque ${it.available_quantity ?? '—'}
+            ${it.shipping?.free_shipping ? ' · frete grátis' : ''}
+          </div>
+          <div class="link-linha">
+            <input readonly value="${esc(link)}">
+            <button class="secundario copiar" data-link="${esc(link)}">Copiar</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function carregarProdutos() {
+  const q = $('busca').value.trim();
+  const cat = $('categoria').value;
+  msg(q ? `Buscando "${esc(q)}"…` : 'Carregando os mais vendidos…');
+  try {
+    const lista = q ? await ML.buscar(q, cat) : await ML.maisVendidos(cat);
+    if (!lista.length) return msg('Nenhum produto encontrado. Tente outra categoria.', 'err');
+    msg('');
+    render(lista);
+  } catch (err) {
+    msg(explicar(err), 'err');
+  }
+}
+
+async function carregarCategorias() {
+  const sel = $('categoria');
+  try {
+    const cats = await ML.categorias();
+    const salva = localStorage.getItem('ml_categoria');
+    sel.innerHTML = cats.map((c) =>
+      `<option value="${esc(c.id)}"${c.id === salva ? ' selected' : ''}>${esc(c.name)}</option>`
+    ).join('');
+    if (!salva) sel.value = cats[0].id;
+    return true;
+  } catch (err) {
+    sel.innerHTML = '<option>—</option>';
+    msg(explicar(err), 'err');
+    return false;
+  }
+}
+
+// ---- fluxo ----
+async function iniciar() {
+  pintarConta();
+  if (!ML.creds.obter()) return mostrarEtapa('setup');
+  if (!ML.conectado()) return mostrarEtapa('conectar');
+
+  mostrarEtapa('produtos');
+  msg('Conectando…');
+  if (await carregarCategorias()) await carregarProdutos();
+}
+
+$('btnSalvarCreds').addEventListener('click', async () => {
+  const clientId = $('clientId').value.trim();
+  const clientSecret = $('clientSecret').value.trim();
+  if (!clientId || !clientSecret) return msg('Preencha o App ID e a Secret Key.', 'err');
+  ML.creds.salvar({ clientId, clientSecret, afiliado: $('afiliado').value.trim() });
+  if (ML.conectado()) { msg(''); return iniciar(); }
+  try { await ML.iniciarLogin(); } catch (err) { msg(explicar(err), 'err'); }
+});
+
+$('btnConectar').addEventListener('click', async () => {
+  try { await ML.iniciarLogin(); } catch (err) { msg(explicar(err), 'err'); }
+});
+
+$('btnAtualizar').addEventListener('click', carregarProdutos);
+$('busca').addEventListener('keydown', (e) => { if (e.key === 'Enter') carregarProdutos(); });
+$('categoria').addEventListener('change', () => {
+  localStorage.setItem('ml_categoria', $('categoria').value);
+  carregarProdutos();
+});
+
+$('btnCopiarLinks').addEventListener('click', () => {
+  navigator.clipboard.writeText(produtos.map((p) => ML.linkAfiliado(p.permalink)).join('\n'));
+});
+
+$('btnCsv').addEventListener('click', () => {
+  const campo = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const linhas = [['id', 'titulo', 'preco', 'vendidos', 'estoque', 'link'].map(campo).join(',')];
+  for (const p of produtos) {
+    linhas.push([p.id, p.title, p.price, p.sold_quantity, p.available_quantity,
+      ML.linkAfiliado(p.permalink)].map(campo).join(','));
+  }
+  const url = URL.createObjectURL(new Blob(['﻿' + linhas.join('\n')],
+    { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = 'produtos.csv'; a.click();
+  URL.revokeObjectURL(url);
 });
 
 document.addEventListener('click', (e) => {
-  const btn = e.target.closest('.copy');
-  if (!btn) return;
-  const el = document.querySelector(btn.dataset.copy);
-  const text = el.value !== undefined ? el.value : el.textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    const old = btn.textContent;
-    btn.textContent = 'Copiado!';
-    setTimeout(() => { btn.textContent = old; }, 1500);
+  const b = e.target.closest('.copiar');
+  if (!b) return;
+  navigator.clipboard.writeText(b.dataset.link).then(() => {
+    b.textContent = 'Copiado!';
+    setTimeout(() => { b.textContent = 'Copiar'; }, 1200);
   });
 });
+
+iniciar();
