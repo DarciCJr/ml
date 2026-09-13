@@ -44,7 +44,7 @@
       main.innerHTML = html;
       if (cfg.script) {
         const s = document.createElement('script');
-        s.src = cfg.script;
+        s.src = `${cfg.script}?v=${window.ML_VERSAO || Date.now()}`;
         document.body.appendChild(s);
       }
     }
@@ -54,7 +54,8 @@
       btn.disabled = true;
       btn.textContent = 'Descriptografando…';
       try {
-        const res = await fetch(cfg.payload, { cache: 'no-cache' });
+        const res = await fetch(`${cfg.payload}?v=${window.ML_VERSAO || Date.now()}`,
+        { cache: 'no-store' });
         if (!res.ok) throw new Error('fetch');
         const html = await decrypt(await res.json(), password);
         sessionStorage.setItem(KEY, password);

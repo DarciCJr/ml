@@ -12,9 +12,8 @@ function msg(html, tipo = '') {
 
 function explicar(err) {
   if (err instanceof ML.ErroRede) {
-    return 'O navegador bloqueou a chamada à API do Mercado Livre (CORS) ou a rede falhou.' +
-      '<br>Se o bloqueio persistir, a consulta pelo navegador não é possível e o caminho ' +
-      'é rodar o job <code>src/sync.mjs</code> num servidor.';
+    return 'A chamada à API não completou (rede ou CORS).<br>' +
+      'Rode o <a href="diagnostico.html">diagnóstico</a> para saber qual dos dois é.';
   }
   return esc(err.message);
 }
@@ -75,7 +74,7 @@ function render(lista) {
   }).join('');
 }
 
-async function carregarProdutos() {
+async function carregarProdutos({ propagar = false } = {}) {
   const q = $('busca').value.trim();
   const cat = $('categoria').value;
   msg(q ? `Buscando "${esc(q)}"…` : 'Carregando os mais vendidos…');
@@ -97,12 +96,12 @@ async function carregarProdutos() {
     msg('');
     render(lista);
   } catch (err) {
-    if (err instanceof ML.PrecisaLogin) throw err;
+    if (propagar || err instanceof ML.PrecisaLogin) throw err;
     msg(explicar(err), 'err');
   }
 }
 
-async function carregarCategorias() {
+async function carregarCategorias({ propagar = false } = {}) {
   const sel = $('categoria');
   try {
     const cats = await ML.categorias();
@@ -114,7 +113,7 @@ async function carregarCategorias() {
     return true;
   } catch (err) {
     sel.innerHTML = '<option>—</option>';
-    if (err instanceof ML.PrecisaLogin) throw err;
+    if (propagar || err instanceof ML.PrecisaLogin) throw err;
     msg(explicar(err), 'err');
     return false;
   }
@@ -126,14 +125,20 @@ async function iniciar() {
   mostrarEtapa('produtos');
   msg('Carregando produtos…');
 
-  // Tenta direto, sem login: boa parte da API do ML é pública.
+  // Tenta sem login primeiro; se não der, a tela de conexão é o caminho.
   try {
-    await carregarCategorias();
-    await carregarProdutos();
+    const propagar = { propagar: !ML.conectado() };
+    await carregarCategorias(propagar);
+    await carregarProdutos(propagar);
   } catch (err) {
-    if (err instanceof ML.PrecisaLogin) {
-      msg('');
-      return mostrarEtapa(ML.creds.obter() ? 'conectar' : 'setup');
+    if (!ML.conectado()) {
+      // A API do ML hoje exige token em praticamente tudo: leve ao login,
+      // mostrando o motivo real em vez de deixar a tela vazia.
+      mostrarEtapa(ML.creds.obter() ? 'conectar' : 'setup');
+      msg(err instanceof ML.PrecisaLogin
+        ? 'O Mercado Livre recusou a consulta sem login.'
+        : `Não consegui consultar sem login: ${explicar(err)}`, 'err');
+      return;
     }
     msg(explicar(err), 'err');
   }

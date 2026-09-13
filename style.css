@@ -152,3 +152,10 @@ button.link {
 .t-nome { color: var(--muted); }
 .t-res { text-align: right; }
 .verde { color: #1d9a4f; } .amarelo { color: #b8860b; } .vermelho { color: #c0392b; }
+textarea {
+  font: inherit; font-family: ui-monospace, monospace; font-size: .8rem;
+  padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card); color: var(--fg); width: 100%; resize: vertical;
+}
+#manual { display: grid; gap: 12px; margin-top: 20px; }
+#manual button { justify-self: start; }
