@@ -171,18 +171,59 @@ window.ML = (() => {
   // ---- consultas ----
   const categorias = () => api(`/sites/${SITE}/categories`);
 
-  async function itens(ids) {
+  /**
+   * Detalhe dos itens. Tenta em lote (20 por chamada, limite do endpoint);
+   * se o lote for negado, cai para consulta individual; se essa também for,
+   * monta o mínimo e busca só o preço pela API de preços.
+   */
+  async function itens(ids, aoProgredir) {
     const out = [];
+    let loteNegado = false;
+
     for (let i = 0; i < ids.length; i += 20) {
-      const lote = await api(`/items?ids=${ids.slice(i, i + 20).join(',')}`);
-      out.push(...lote.filter((r) => r.code === 200).map((r) => r.body));
+      const fatia = ids.slice(i, i + 20);
+
+      if (!loteNegado) {
+        try {
+          const lote = await api(`/items?ids=${fatia.join(',')}`);
+          out.push(...lote.filter((r) => r.code === 200).map((r) => r.body));
+          aoProgredir?.(out.length, ids.length);
+          continue;
+        } catch {
+          loteNegado = true;   // não insiste no lote nas próximas fatias
+        }
+      }
+
+      const um = await Promise.all(fatia.map(async (id) => {
+        try {
+          return await api(`/items/${id}`);
+        } catch {
+          try {
+            const sp = await api(`/items/${id}/sale_price?context=channel_marketplace`);
+            return { id, title: id, price: sp?.amount ?? null,
+                     original_price: sp?.regular_amount ?? null,
+                     permalink: `https://www.mercadolivre.com.br/p/${id}` };
+          } catch {
+            return null;
+          }
+        }
+      }));
+      out.push(...um.filter(Boolean));
+      aoProgredir?.(out.length, ids.length);
     }
     return out;
   }
 
-  async function maisVendidos(categoria) {
+  async function maisVendidos(categoria, aoProgredir) {
     const { content } = await api(`/highlights/${SITE}/category/${categoria}`);
-    return itens(content.filter((h) => h.type === 'ITEM').map((h) => h.id));
+    const ids = (content || []).filter((h) => h.type === 'ITEM').map((h) => h.id);
+    if (!ids.length) return [];
+    const lista = await itens(ids, aoProgredir);
+    // Os destaques já vêm em ordem de relevância de vendas: preserva-a para os
+    // itens cuja quantidade vendida a API não informar.
+    const posicao = new Map(ids.map((id, i) => [id, i]));
+    lista.forEach((it) => { it.posicao_destaque = posicao.get(it.id) ?? 999; });
+    return lista;
   }
 
   async function buscar(q, categoria) {

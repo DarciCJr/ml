@@ -94,7 +94,8 @@ async function carregarProdutos({ propagar = false } = {}) {
     const fontes = q
       ? [['busca', () => ML.buscar(q, cat)],
          ['catálogo', () => ML.catalogo(q, cat)]]
-      : [['mais vendidos', () => ML.maisVendidos(cat)],
+      : [['mais vendidos', () => ML.maisVendidos(cat, (f, t) =>
+            msg(`Carregando mais vendidos… ${f}/${t}`))],
          ['busca', () => ML.buscar('', cat)],
          ['catálogo', () => ML.catalogo('', cat, nomeCat)]];
 
@@ -130,7 +131,14 @@ async function carregarProdutos({ propagar = false } = {}) {
     }
 
     // Ranking: mais vendidos primeiro; sem dado de vendas vai para o fim.
-    lista.sort((a, b) => (b.sold_quantity ?? -1) - (a.sold_quantity ?? -1));
+    lista.sort((a, b) => {
+      const va = a.sold_quantity, vb = b.sold_quantity;
+      if (va != null && vb != null) return vb - va;
+      if (va != null) return -1;
+      if (vb != null) return 1;
+      // Sem dado de vendas, mantém a ordem de destaque que o ML devolveu.
+      return (a.posicao_destaque ?? 999) - (b.posicao_destaque ?? 999);
+    });
 
     $('fonte').textContent = `via ${usada}`;
     window.ML_NOTA = notaEnriquecimento;

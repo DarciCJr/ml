@@ -68,6 +68,22 @@ async function testar(nome, path, opcoes = {}) {
     if (t.user_id) {
       r.meusItens = await testar('Meus anúncios', comToken(`/users/${t.user_id}/items/search`));
     }
+
+    // O teste anterior usava um ID inventado, o que torna o resultado inútil.
+    // Pega um item real dos destaques e testa os endpoints que a listagem usa.
+    let idReal = null;
+    try {
+      const h = await (await fetch(`${API}${comToken('/highlights/MLB/category/MLB1051')}`)).json();
+      idReal = (h.content || []).find((x) => x.type === 'ITEM')?.id || null;
+    } catch { /* sem id real, pula */ }
+
+    if (idReal) {
+      testes.insertAdjacentHTML('beforeend',
+        `<p class="warn" style="margin-top:18px">Com um item real dos mais vendidos (${idReal}):</p>`);
+      r.itemLote  = await testar('Itens em lote', comToken(`/items?ids=${idReal}`));
+      r.itemUnico = await testar('Item individual', comToken(`/items/${idReal}`));
+      r.itemPreco = await testar('Preço do item', comToken(`/items/${idReal}/sale_price?context=channel_marketplace`));
+    }
   }
 
   let titulo, texto, cor;
@@ -76,10 +92,16 @@ async function testar(nome, path, opcoes = {}) {
     ['o catálogo', r.catalogo], ['a descoberta por domínio', r.dominio]
   ].filter(([, v]) => v?.ok).map(([n]) => n);
 
+  const detalheItem = r.itemLote?.ok ? 'em lote'
+    : r.itemUnico?.ok ? 'um a um'
+    : r.itemPreco?.ok ? 'só o preço' : null;
+
   if (t?.access_token && fontes.length) {
     titulo = 'Funciona — dá para listar produtos';
-    texto = `Sua aplicação tem acesso a: ${fontes.join(', ')}. ` +
-      'A tela de produtos pode usar essas fontes.';
+    texto = `Sua aplicação tem acesso a: ${fontes.join(', ')}.` +
+      (detalheItem
+        ? ` O detalhe dos itens (título, preço, vendas) pode ser lido ${detalheItem}.`
+        : ' Porém o detalhe dos itens é negado, então preço e vendas podem faltar.');
     cor = 'ok';
   } else if (t?.access_token && r.quemSou?.ok) {
     titulo = 'Token válido, mas sem acesso aos produtos';
