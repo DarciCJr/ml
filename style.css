@@ -54,3 +54,23 @@ button.copy {
 details { margin-top: 32px; color: var(--muted); font-size: .9rem; }
 summary { cursor: pointer; color: var(--fg); }
 .warn { color: var(--muted); font-size: .85rem; }
+
+/* ---- Área restrita / conteúdo ---- */
+article h1 { margin-top: 0; }
+article h2 {
+  font-size: 1.25rem; margin: 36px 0 10px;
+  padding-top: 20px; border-top: 1px solid var(--line);
+}
+article h3 { font-size: 1rem; margin: 24px 0 6px; }
+article p, article li { color: var(--fg); }
+article ul, article ol { padding-left: 22px; }
+article li { margin: 8px 0; }
+article code { background: var(--card); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line); display: inline; white-space: normal; }
+.callout {
+  background: var(--card); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px; padding: 4px 18px; margin: 20px 0;
+}
+.closing { color: var(--muted); font-style: italic; }
+#gate { max-width: 380px; }
+.restricted { margin: 24px 0; font-size: .9rem; }

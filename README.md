@@ -59,3 +59,24 @@ não envia nada para lugar nenhum: `client_id` fica em `localStorage` e o
 
 Para uso em produção, a troca do code por token precisa de um backend
 (ex.: uma função serverless) guardando o secret em variável de ambiente.
+
+## Área restrita (`vantagens.html`)
+
+Página sobre as vantagens da API para trabalho com afiliados, protegida por senha.
+
+Como o GitHub Pages é estático, não existe servidor para validar senha — uma
+checagem em JavaScript seria contornada em segundos com "ver código-fonte".
+Por isso o conteúdo é **criptografado** (PBKDF2-SHA256, 310.000 iterações →
+AES-256-GCM) e publicado apenas como texto cifrado em `vantagens.enc.json`.
+Sem a senha não há texto a ler, nem no código-fonte.
+
+O texto em claro fica em `content/`, que está no `.gitignore` e **não deve ser
+versionado** enquanto o repositório for público.
+
+Para editar o conteúdo e republicar:
+
+```bash
+node build/encrypt.mjs 'SUA_SENHA' content/vantagens.inner.html vantagens.enc.json
+```
+
+Trocar a senha é só rodar o comando acima com a nova — o payload é regerado.
