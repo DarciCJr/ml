@@ -86,17 +86,27 @@ window.ML = (() => {
     return t.access_token;
   }
 
+  /** Erro que indica: este endpoint exige login. */
+  class PrecisaLogin extends Error {}
+
   async function api(path, { jaRenovou = false } = {}) {
-    const token = await tokenValido();
+    // Sem tokens guardados, tenta como chamada pública — boa parte da API
+    // do ML responde sem autenticação.
+    const headers = { accept: 'application/json' };
+    const temToken = !!tokens.obter();
+    if (temToken) headers.Authorization = `Bearer ${await tokenValido()}`;
+
     let res;
     try {
-      res = await fetch(`${API}${path}`, {
-        headers: { Authorization: `Bearer ${token}`, accept: 'application/json' }
-      });
+      res = await fetch(`${API}${path}`, { headers });
     } catch {
       throw new ErroRede('bloqueio de CORS ou falha de rede');
     }
-    if (res.status === 401 && !jaRenovou) {
+
+    if ((res.status === 401 || res.status === 403) && !temToken) {
+      throw new PrecisaLogin('Este endpoint exige login.');
+    }
+    if (res.status === 401 && temToken && !jaRenovou) {
       await renovar();
       return api(path, { jaRenovou: true });
     }
@@ -161,7 +171,7 @@ window.ML = (() => {
   }
 
   return {
-    creds, tokens, ErroRede, trocarCode, tokenValido, iniciarLogin,
+    creds, tokens, ErroRede, PrecisaLogin, trocarCode, tokenValido, iniciarLogin,
     categorias, maisVendidos, buscar, linkAfiliado, REDIRECT,
     conectado: () => !!tokens.obter()
   };

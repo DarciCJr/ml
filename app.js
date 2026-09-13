@@ -80,11 +80,24 @@ async function carregarProdutos() {
   const cat = $('categoria').value;
   msg(q ? `Buscando "${esc(q)}"…` : 'Carregando os mais vendidos…');
   try {
-    const lista = q ? await ML.buscar(q, cat) : await ML.maisVendidos(cat);
+    let lista;
+    if (q) {
+      lista = await ML.buscar(q, cat);
+    } else {
+      // /highlights costuma exigir login; a busca por categoria é o plano B.
+      try {
+        lista = await ML.maisVendidos(cat);
+      } catch (err) {
+        if (!(err instanceof ML.PrecisaLogin) || !ML.conectado()) {
+          lista = await ML.buscar('', cat);
+        } else { throw err; }
+      }
+    }
     if (!lista.length) return msg('Nenhum produto encontrado. Tente outra categoria.', 'err');
     msg('');
     render(lista);
   } catch (err) {
+    if (err instanceof ML.PrecisaLogin) throw err;
     msg(explicar(err), 'err');
   }
 }
@@ -101,6 +114,7 @@ async function carregarCategorias() {
     return true;
   } catch (err) {
     sel.innerHTML = '<option>—</option>';
+    if (err instanceof ML.PrecisaLogin) throw err;
     msg(explicar(err), 'err');
     return false;
   }
@@ -109,12 +123,20 @@ async function carregarCategorias() {
 // ---- fluxo ----
 async function iniciar() {
   pintarConta();
-  if (!ML.creds.obter()) return mostrarEtapa('setup');
-  if (!ML.conectado()) return mostrarEtapa('conectar');
-
   mostrarEtapa('produtos');
-  msg('Conectando…');
-  if (await carregarCategorias()) await carregarProdutos();
+  msg('Carregando produtos…');
+
+  // Tenta direto, sem login: boa parte da API do ML é pública.
+  try {
+    await carregarCategorias();
+    await carregarProdutos();
+  } catch (err) {
+    if (err instanceof ML.PrecisaLogin) {
+      msg('');
+      return mostrarEtapa(ML.creds.obter() ? 'conectar' : 'setup');
+    }
+    msg(explicar(err), 'err');
+  }
 }
 
 $('btnSalvarCreds').addEventListener('click', async () => {
@@ -130,11 +152,13 @@ $('btnConectar').addEventListener('click', async () => {
   try { await ML.iniciarLogin(); } catch (err) { msg(explicar(err), 'err'); }
 });
 
-$('btnAtualizar').addEventListener('click', carregarProdutos);
-$('busca').addEventListener('keydown', (e) => { if (e.key === 'Enter') carregarProdutos(); });
+$('btnAtualizar').addEventListener('click', () => carregarProdutos().catch(() => iniciar()));
+$('busca').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') carregarProdutos().catch(() => iniciar());
+});
 $('categoria').addEventListener('change', () => {
   localStorage.setItem('ml_categoria', $('categoria').value);
-  carregarProdutos();
+  carregarProdutos().catch(() => iniciar());
 });
 
 $('btnCopiarLinks').addEventListener('click', () => {
