@@ -4,7 +4,8 @@ const brl = (n) => typeof n === 'number'
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-let produtos = [];
+let produtos = [];   // o que está na tela
+let todos = [];      // tudo que foi carregado
 
 function msg(html, tipo = '') {
   $('status').innerHTML = html ? `<div class="box ${tipo}">${html}</div>` : '';
@@ -54,7 +55,10 @@ function pintarConta() {
 // ---- produtos ----
 function render(lista) {
   produtos = lista;
-  $('contagem').textContent = `${lista.length} produto${lista.length === 1 ? '' : 's'}`;
+  const filtrado = todos.length && lista.length !== todos.length;
+  $('contagem').textContent = filtrado
+    ? `${lista.length} de ${todos.length} produtos`
+    : `${lista.length} produto${lista.length === 1 ? '' : 's'}`;
   $('lista').innerHTML = lista.map((it, i) => {
     const link = ML.linkAfiliado(it.permalink);
     const temDesconto = it.original_price && it.original_price > it.price;
@@ -84,20 +88,17 @@ function render(lista) {
 }
 
 async function carregarProdutos({ propagar = false } = {}) {
-  const q = $('busca').value.trim();
   const cat = $('categoria').value;
-  msg(q ? `Buscando "${esc(q)}"…` : 'Carregando os mais vendidos…');
+  const nomeCat = $('categoria').selectedOptions[0]?.textContent?.trim() || '';
+  msg('Carregando os mais vendidos…');
   try {
-    // O ML libera endpoints diferentes por aplicação: tenta em ordem e usa o
-    // primeiro que responder, em vez de falhar no primeiro "forbidden".
-    const nomeCat = $('categoria').selectedOptions[0]?.textContent?.trim() || '';
-    const fontes = q
-      ? [['busca', () => ML.buscar(q, cat)],
-         ['catálogo', () => ML.catalogo(q, cat)]]
-      : [['mais vendidos', () => ML.maisVendidos(cat, (f, t) =>
-            msg(`Carregando mais vendidos… ${f}/${t}`))],
-         ['busca', () => ML.buscar('', cat)],
-         ['catálogo', () => ML.catalogo('', cat, nomeCat)]];
+    // A busca (/sites/MLB/search) é negada para esta aplicação; os destaques
+    // são a fonte boa, e o catálogo fica como reserva.
+    const fontes = [
+      ['mais vendidos', () => ML.maisVendidos(cat, (f, t) =>
+        msg(`Carregando os mais vendidos… ${f}/${t}`))],
+      ['catálogo', () => ML.catalogo('', cat, nomeCat)]
+    ];
 
     let lista = null, usada = null, ultimo = null;
     const tentativas = [];
@@ -113,42 +114,45 @@ async function carregarProdutos({ propagar = false } = {}) {
       }
     }
     window.ML_TENTATIVAS = tentativas;
-    if (!lista) {
-      throw ultimo || new Error('Nenhuma fonte de produtos respondeu.');
-    }
+    if (!lista) throw ultimo || new Error('Nenhuma fonte de produtos respondeu.');
 
     // O catálogo vem sem preço nem vendas: completa item a item.
-    let notaEnriquecimento = '';
-    if (lista.some((p) => p.price == null || p.sold_quantity == null)) {
-      lista = await ML.enriquecer(lista, (feitos, total) =>
-        msg(`Carregando preços e vendas… ${feitos}/${total}`));
-      // Só avisa sobre o que continuou faltando depois de todas as tentativas.
+    let nota = '';
+    if (lista.some((x) => x.price == null || x.sold_quantity == null)) {
+      lista = await ML.enriquecer(lista, (f, t) => msg(`Carregando preços e vendas… ${f}/${t}`));
       const incompletos = lista.filter((x) => x.price == null).length;
       if (incompletos) {
-        notaEnriquecimento = `${incompletos} de ${lista.length} produtos ficaram sem preço` +
+        nota = `${incompletos} de ${lista.length} produtos ficaram sem preço` +
           (lista.motivoFalha ? ` — o Mercado Livre respondeu: ${esc(lista.motivoFalha)}` : '');
       }
     }
 
-    // Ranking: mais vendidos primeiro; sem dado de vendas vai para o fim.
+    // Ranking: mais vendidos primeiro; sem o dado, a ordem de destaque do ML.
     lista.sort((a, b) => {
       const va = a.sold_quantity, vb = b.sold_quantity;
       if (va != null && vb != null) return vb - va;
       if (va != null) return -1;
       if (vb != null) return 1;
-      // Sem dado de vendas, mantém a ordem de destaque que o ML devolveu.
       return (a.posicao_destaque ?? 999) - (b.posicao_destaque ?? 999);
     });
 
+    todos = lista;
     $('fonte').textContent = `via ${usada}`;
-    window.ML_NOTA = notaEnriquecimento;
-    if (!lista.length) return msg('Nenhum produto encontrado. Tente outra categoria.', 'err');
-    msg(window.ML_NOTA || '', window.ML_NOTA ? 'err' : '');
-    render(lista);
+    msg(nota, nota ? 'err' : '');
+    aplicarFiltro();
   } catch (err) {
     if (propagar || err instanceof ML.PrecisaLogin) throw err;
-    msg(explicar(err), 'err');
+    msg(explicar(err) + detalhes(), 'err');
   }
+}
+
+/** Filtro local: a busca da API é negada, então filtramos o que já carregou. */
+function aplicarFiltro() {
+  const termo = $('filtro').value.trim().toLowerCase();
+  const vis = termo
+    ? todos.filter((p) => (p.title || '').toLowerCase().includes(termo))
+    : todos;
+  render(vis);
 }
 
 async function carregarCategorias({ propagar = false } = {}) {
@@ -208,13 +212,13 @@ $('btnConectar').addEventListener('click', async () => {
 });
 
 $('btnAtualizar').addEventListener('click', () => carregarProdutos().catch(() => iniciar()));
-$('busca').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') carregarProdutos().catch(() => iniciar());
-});
 $('categoria').addEventListener('change', () => {
   localStorage.setItem('ml_categoria', $('categoria').value);
+  $('filtro').value = '';
   carregarProdutos().catch(() => iniciar());
 });
+
+$('filtro').addEventListener('input', aplicarFiltro);
 
 $('btnCopiarLinks').addEventListener('click', () => {
   navigator.clipboard.writeText(produtos.map((p) => ML.linkAfiliado(p.permalink)).join('\n'));

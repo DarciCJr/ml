@@ -170,3 +170,13 @@ textarea {
 .sem-dado { color: var(--muted); font-size: .85rem; }
 details { margin-top: 10px; }
 details pre { margin-top: 8px; font-size: .75rem; }
+
+/* ---- Lista de mais vendidos ---- */
+.barra { align-items: flex-start; }
+.resumo { display: flex; flex-direction: column; gap: 2px; }
+.filtro { padding: 6px 10px; font-size: .85rem; width: 150px; }
+.acoes { align-items: center; }
+@media (max-width: 560px) {
+  .acoes { width: 100%; }
+  .filtro { flex: 1; width: auto; }
+}
