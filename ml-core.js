@@ -256,7 +256,34 @@ window.ML = (() => {
         } catch { /* sem caminho para este produto */ }
       }
       if (!d) { naoResolvidos.push(id); continue; }
-      const bbw = d.buy_box_winner || {};
+      let bbw = d.buy_box_winner || {};
+
+      // Sem vencedor na resposta não há preço nem vendas: busca os anúncios
+      // do produto e usa o primeiro como referência.
+      if (bbw.price == null) {
+        try {
+          const r = await api(`/products/${id}/items`);
+          const primeiro = (r.results || r.items || [])[0];
+          const itemId = typeof primeiro === 'string' ? primeiro : primeiro?.id;
+          if (itemId) {
+            try {
+              const it = await api(`/items/${itemId}`);
+              bbw = {
+                item_id: itemId,
+                price: it.price ?? null,
+                original_price: it.original_price ?? null,
+                sold_quantity: it.sold_quantity ?? null,
+                available_quantity: it.available_quantity ?? null,
+                shipping: it.shipping ?? null,
+                permalink: it.permalink ?? null
+              };
+            } catch {
+              bbw = { ...bbw, item_id: itemId };
+            }
+          }
+        } catch { /* produto sem anúncios acessíveis */ }
+      }
+
       achados.push({
         id,
         title: d.name || d.title || id,
@@ -467,9 +494,28 @@ window.ML = (() => {
     return FAIXAS.get(n) || String(n);
   }
 
+  /**
+   * Monta o link de afiliado. O formato correto é definido pelo programa de
+   * Afiliados, não pela API, então preferimos copiar os parâmetros de um link
+   * real que o usuário tenha gerado — assim não dependemos de suposição.
+   */
   function linkAfiliado(permalink) {
-    const id = creds.obter()?.afiliado?.trim();
-    if (!id || !permalink) return permalink || '';
+    if (!permalink) return '';
+    const c = creds.obter() || {};
+
+    const modelo = (c.modeloAfiliado || '').trim();
+    if (modelo) {
+      try {
+        const m = new URL(modelo);
+        const u = new URL(permalink);
+        // Só os parâmetros de rastreio interessam; o caminho é do produto.
+        m.searchParams.forEach((v, k) => u.searchParams.set(k, v));
+        return u.toString();
+      } catch { /* modelo inválido: cai no identificador solto */ }
+    }
+
+    const id = (c.afiliado || '').trim();
+    if (!id) return permalink;
     try {
       const u = new URL(permalink);
       u.searchParams.set('matt_tool', id);
@@ -477,10 +523,16 @@ window.ML = (() => {
     } catch { return permalink; }
   }
 
+  /** Diz se o link está sendo montado por suposição nossa. */
+  function formatoAfiliadoSuposto() {
+    const c = creds.obter() || {};
+    return !((c.modeloAfiliado || '').trim()) && !!(c.afiliado || '').trim();
+  }
+
   return {
     creds, tokens, ErroRede, PrecisaLogin, trocarCode, tokenValido, iniciarLogin,
     categorias, maisVendidos, buscar, catalogo, enriquecer, linkAfiliado,
-    estoqueTexto, REDIRECT,
+    estoqueTexto, formatoAfiliadoSuposto, REDIRECT,
     historico: () => historico.slice(),
     conectado: () => !!tokens.obter()
   };

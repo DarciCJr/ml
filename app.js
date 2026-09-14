@@ -51,6 +51,7 @@ function pintarConta() {
     $('clientId').value = c.clientId || '';
     $('clientSecret').value = c.clientSecret || '';
     $('afiliado').value = c.afiliado || '';
+    $('modeloAfiliado').value = c.modeloAfiliado || '';
     mostrarEtapa('setup');
   });
 }
@@ -146,6 +147,11 @@ async function carregarProdutos({ propagar = false } = {}) {
         `${lista.naoResolvidos} de ${lista.totalDestaques} destaques não puderam ` +
         'ser lidos (produtos de catálogo negados pela API).';
     }
+    if (ML.formatoAfiliadoSuposto()) {
+      nota = (nota ? nota + ' ' : '') +
+        'Atenção: o formato do link de afiliado é uma suposição (matt_tool) e ' +
+        'pode não creditar sua comissão. Cole um link real em "credenciais".';
+    }
     todos = lista;
     $('fonte').textContent = `via ${usada}${lista.tipos ? ` — ${lista.tipos}` : ''}`;
     msg(nota, nota ? 'err' : '');
@@ -212,7 +218,11 @@ $('btnSalvarCreds').addEventListener('click', async () => {
   const clientId = $('clientId').value.trim();
   const clientSecret = $('clientSecret').value.trim();
   if (!clientId || !clientSecret) return msg('Preencha o App ID e a Secret Key.', 'err');
-  ML.creds.salvar({ clientId, clientSecret, afiliado: $('afiliado').value.trim() });
+  ML.creds.salvar({
+    clientId, clientSecret,
+    afiliado: $('afiliado').value.trim(),
+    modeloAfiliado: $('modeloAfiliado').value.trim()
+  });
   if (ML.conectado()) { msg(''); return iniciar(); }
   try { await ML.iniciarLogin(); } catch (err) { msg(explicar(err), 'err'); }
 });
