@@ -99,11 +99,52 @@ function render(lista) {
       </div>`;
   }).join('');
   atualizarContagemLoja();
+  atualizarAssistente();
 }
 
 function atualizarContagemLoja() {
   $('lojaContagem').textContent = ML.loja().length;
 }
+
+// ---- assistente: um produto de cada vez, sem procurar a linha certa ----
+let alvoAssistente = null;
+
+function proximoSemLink() {
+  return produtos.find((p) => !ML.linkSalvo(p.id)) || null;
+}
+
+function atualizarAssistente() {
+  alvoAssistente = proximoSemLink();
+  const comLink = produtos.length - produtos.filter((p) => !ML.linkSalvo(p.id)).length;
+  $('assistenteProgresso').textContent = `${comLink} de ${produtos.length} com link`;
+
+  if (!alvoAssistente) {
+    $('assistente').hidden = true;
+    $('assistenteFim').hidden = produtos.length === 0;
+    return;
+  }
+  $('assistente').hidden = false;
+  $('assistenteFim').hidden = true;
+  $('assistenteProduto').innerHTML =
+    `<img src="${esc(alvoAssistente.secure_thumbnail || alvoAssistente.thumbnail || '')}" alt="">
+     <span>${esc(alvoAssistente.title)}</span>`;
+  $('assistenteAbrir').href = alvoAssistente.permalink;
+}
+
+$('assistenteAbrir').addEventListener('click', () => {
+  setTimeout(() => $('assistenteInput').focus(), 100);
+});
+
+$('assistenteInput').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  const link = e.target.value.trim();
+  if (!link || !alvoAssistente) return;
+  ML.salvarLink(alvoAssistente.id, link);
+  e.target.value = '';
+  aplicarFiltro();       // atualiza a linha correspondente na lista completa
+  atualizarAssistente();
+  $('assistenteInput').focus();
+});
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -376,6 +417,7 @@ $('lista').addEventListener('change', (e) => {
         if (produto) { ML.alternarLoja(produto, false); atualizarContagemLoja(); }
       }
     }
+    atualizarAssistente();
     return;
   }
 

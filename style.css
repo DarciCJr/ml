@@ -223,3 +223,13 @@ details pre { margin-top: 8px; font-size: .75rem; }
   .loja-linha { grid-template-columns: 24px 40px 1fr; grid-template-areas: "pos img titulo" "pos img preco" "pos img acao"; row-gap: 2px; }
   .loja-linha .botaolink { justify-self: start; }
 }
+
+/* ---- Assistente de link (fluxo sequencial) ---- */
+.assistente { border-color: var(--accent); }
+.assistente-topo { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.assistente-produto { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.assistente-produto img { width: 48px; height: 48px; object-fit: contain; border-radius: 6px; background: #fff; flex-shrink: 0; }
+.assistente-produto span { font-size: .9rem; }
+.assistente-acao { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.assistente-acao .botaolink { margin: 0; white-space: nowrap; }
+#assistenteInput { flex: 1; min-width: 200px; padding: 9px 12px; font-size: .9rem; }
