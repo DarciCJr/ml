@@ -78,7 +78,7 @@ function render(lista) {
           </div>
           <div class="meta">
             ${it.sold_quantity != null ? `<b>${it.sold_quantity.toLocaleString('pt-BR')} vendidos</b>` : 'vendas não informadas'}
-            ${it.available_quantity != null ? ` · estoque ${it.available_quantity}` : ''}
+            ${it.available_quantity != null ? ` · estoque ${ML.estoqueTexto(it.available_quantity)}` : ''}
             ${it.shipping?.free_shipping ? ' · frete grátis' : ''}
           </div>
           <div class="link-linha">

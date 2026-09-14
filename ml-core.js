@@ -199,11 +199,16 @@ window.ML = (() => {
           try { lote = await api(rota); break; } catch { /* tenta o próximo */ }
         }
         if (lote) {
-          // Respostas possíveis: [{code,body}] ou uma lista de itens direta.
+          // /items/bulk renomeou o campo code para status_code e passou a
+          // repetir o id na raiz de cada elemento; o legado ainda usa code.
+          // A resposta também pode vir como lista de itens sem envelope.
           const linhas = Array.isArray(lote) ? lote : (lote.body || lote.results || []);
-          out.push(...linhas
-            .map((r) => (r && r.body ? (r.code === 200 ? r.body : null) : r))
-            .filter(Boolean));
+          out.push(...linhas.map((r) => {
+            if (!r) return null;
+            if (!r.body) return r;                       // item direto
+            const st = r.status_code ?? r.code;
+            return (st == null || st === 200) ? r.body : null;
+          }).filter(Boolean));
           aoProgredir?.(out.length, ids.length);
           continue;
         }
@@ -448,6 +453,20 @@ window.ML = (() => {
     }));
   }
 
+  /**
+   * Nos recursos públicos o available_quantity é referencial: o valor
+   * devolvido representa o início de uma faixa, não o estoque exato.
+   */
+  const FAIXAS = new Map([
+    [1, '1 a 50'], [50, '51 a 100'], [100, '101 a 150'], [150, '151 a 200'],
+    [200, '201 a 250'], [250, '251 a 500'], [500, '501 a 5.000'],
+    [5000, '5.001 a 50.000'], [50000, 'mais de 50.000']
+  ]);
+  function estoqueTexto(n) {
+    if (n == null) return null;
+    return FAIXAS.get(n) || String(n);
+  }
+
   function linkAfiliado(permalink) {
     const id = creds.obter()?.afiliado?.trim();
     if (!id || !permalink) return permalink || '';
@@ -460,7 +479,8 @@ window.ML = (() => {
 
   return {
     creds, tokens, ErroRede, PrecisaLogin, trocarCode, tokenValido, iniciarLogin,
-    categorias, maisVendidos, buscar, catalogo, enriquecer, linkAfiliado, REDIRECT,
+    categorias, maisVendidos, buscar, catalogo, enriquecer, linkAfiliado,
+    estoqueTexto, REDIRECT,
     historico: () => historico.slice(),
     conectado: () => !!tokens.obter()
   };
