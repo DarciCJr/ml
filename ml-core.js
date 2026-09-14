@@ -269,23 +269,65 @@ window.ML = (() => {
     return achados;
   }
 
+  /**
+   * Destaques do tipo USER_PRODUCT. O recurso próprio é /user-products/{id};
+   * quando ele não responde, o identificador costuma valer como anúncio.
+   */
+  async function userProdutosPorId(ids) {
+    const achados = [];
+    const naoResolvidos = [];
+    for (const id of ids) {
+      let d = null;
+      for (const rota of [`/user-products/${id}`, `/items/${id}`]) {
+        try { d = await api(rota); break; } catch { /* tenta o próximo */ }
+      }
+      if (!d) { naoResolvidos.push(id); continue; }
+      const bbw = d.buy_box_winner || {};
+      achados.push({
+        id,
+        title: d.name || d.title || id,
+        price: d.price ?? bbw.price ?? null,
+        original_price: d.original_price ?? bbw.original_price ?? null,
+        sold_quantity: d.sold_quantity ?? bbw.sold_quantity ?? null,
+        available_quantity: d.available_quantity ?? bbw.available_quantity ?? null,
+        shipping: d.shipping ?? bbw.shipping ?? null,
+        secure_thumbnail: d.secure_thumbnail || d.pictures?.[0]?.url
+          || d.pictures?.[0]?.secure_url || '',
+        permalink: d.permalink || bbw.permalink
+          || `https://www.mercadolivre.com.br/p/${id}`,
+        item_id: bbw.item_id ?? (d.id && String(d.id).startsWith('MLB') ? d.id : null)
+      });
+    }
+    achados.naoResolvidos = naoResolvidos;
+    return achados;
+  }
+
   async function maisVendidos(categoria, aoProgredir) {
     const { content } = await api(`/highlights/${SITE}/category/${categoria}`);
     const entradas = (content || []).filter((h) => h?.id);
 
-    // Os destaques misturam anúncios (ITEM) e produtos de catálogo (PRODUCT).
-    // Descartar os PRODUCT zerava categorias inteiras, então cada tipo segue
-    // pelo caminho que lhe corresponde.
-    const ehItem = (h) => !h.type || h.type.toUpperCase() === 'ITEM';
-    const idsItem = entradas.filter(ehItem).map((h) => h.id);
-    const idsProduto = entradas.filter((h) => !ehItem(h)).map((h) => h.id);
+    // O campo type assume ITEM, PRODUCT ou USER_PRODUCT. Cada um se resolve
+    // por um recurso diferente; tratar todos como anúncio zerava categorias.
+    const tipo = (h) => (h.type || 'ITEM').toUpperCase();
+    const idsItem = entradas.filter((h) => tipo(h) === 'ITEM').map((h) => h.id);
+    const idsProduto = entradas.filter((h) => tipo(h) === 'PRODUCT').map((h) => h.id);
+    const idsUserProduto = entradas.filter((h) => tipo(h) === 'USER_PRODUCT').map((h) => h.id);
 
     const lista = [];
-    if (idsItem.length) lista.push(...await itens(idsItem, aoProgredir));
     let naoResolvidos = [];
+
+    if (idsItem.length) lista.push(...await itens(idsItem, aoProgredir));
+
+    if (idsUserProduto.length) {
+      const ups = await userProdutosPorId(idsUserProduto);
+      naoResolvidos = naoResolvidos.concat(ups.naoResolvidos || []);
+      lista.push(...ups);
+      aoProgredir?.(lista.length, entradas.length);
+    }
+
     if (idsProduto.length) {
       const prods = await produtosPorId(idsProduto);
-      naoResolvidos = prods.naoResolvidos || [];
+      naoResolvidos = naoResolvidos.concat(prods.naoResolvidos || []);
       lista.push(...prods);
       aoProgredir?.(lista.length, entradas.length);
     }
@@ -298,14 +340,18 @@ window.ML = (() => {
 
     if (!lista.length && entradas.length) {
       throw new Error(
-        `Os ${entradas.length} destaques desta categoria são produtos de catálogo, ` +
-        'e a API recusou a leitura deles para esta aplicação. Tente outra categoria.'
+        `Os ${entradas.length} destaques desta categoria não puderam ser lidos: ` +
+        'a API recusou os recursos de produto para esta aplicação. Tente outra categoria.'
       );
     }
 
     lista.totalDestaques = entradas.length;
     lista.naoResolvidos = naoResolvidos.length;
-    lista.tipos = `${idsItem.length} anúncios, ${idsProduto.length} produtos de catálogo`;
+    lista.tipos = [
+      idsItem.length && `${idsItem.length} anúncios`,
+      idsProduto.length && `${idsProduto.length} produtos`,
+      idsUserProduto.length && `${idsUserProduto.length} produtos de vendedor`
+    ].filter(Boolean).join(', ');
     return lista;
   }
 
