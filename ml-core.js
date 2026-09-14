@@ -106,6 +106,12 @@ window.ML = (() => {
     });
   }
 
+  const historico = [];
+  function registrar(path, resultado) {
+    historico.push(`${path.split('&access_token=')[0]} -> ${resultado}`);
+    if (historico.length > 40) historico.shift();
+  }
+
   async function api(path, { jaRenovou = false } = {}) {
     const temToken = !!tokens.obter();
 
@@ -144,6 +150,7 @@ window.ML = (() => {
       return api(path, { jaRenovou: true });
     }
     const body = await res.json().catch(() => ({}));
+    registrar(path, res.status);
     if (res.status === 429) throw new Error('Limite de chamadas atingido. Espere um minuto.');
     if (!res.ok) throw new Error(body.message || `${res.status} em ${path}`);
     return body;
@@ -223,19 +230,82 @@ window.ML = (() => {
     return out;
   }
 
+  /**
+   * Resolve entradas de destaque do tipo PRODUCT (produtos de catálogo).
+   * /products/{id} costuma ser negado, mas a busca de catálogo aceita
+   * product_identifier — é o campo que a própria mensagem de erro do
+   * endpoint indica como alternativa a keywords.
+   */
+  async function produtosPorId(ids) {
+    const achados = [];
+    const naoResolvidos = [];
+    for (const id of ids) {
+      let d = null;
+      try {
+        d = await api(`/products/${id}`);
+      } catch {
+        try {
+          const p = new URLSearchParams({ site_id: SITE, product_identifier: id });
+          const r = await api(`/products/search?${p}`);
+          d = (r.results || [])[0] || null;
+        } catch { /* sem caminho para este produto */ }
+      }
+      if (!d) { naoResolvidos.push(id); continue; }
+      const bbw = d.buy_box_winner || {};
+      achados.push({
+        id,
+        title: d.name || d.title || id,
+        price: bbw.price ?? null,
+        original_price: bbw.original_price ?? null,
+        sold_quantity: bbw.sold_quantity ?? null,
+        available_quantity: bbw.available_quantity ?? null,
+        shipping: bbw.shipping ?? null,
+        secure_thumbnail: d.pictures?.[0]?.url || d.pictures?.[0]?.secure_url || '',
+        permalink: bbw.permalink || d.permalink || `https://www.mercadolivre.com.br/p/${id}`,
+        item_id: bbw.item_id ?? null
+      });
+    }
+    achados.naoResolvidos = naoResolvidos;
+    return achados;
+  }
+
   async function maisVendidos(categoria, aoProgredir) {
     const { content } = await api(`/highlights/${SITE}/category/${categoria}`);
-    // O campo type nem sempre vem como 'ITEM'; filtrar por ele zerava a lista.
-    // Basta a entrada ter um id de item para ser utilizável.
-    const ids = (content || [])
-      .filter((h) => h?.id && (!h.type || h.type.toUpperCase() === 'ITEM'))
-      .map((h) => h.id);
-    if (!ids.length) return [];
-    const lista = await itens(ids, aoProgredir);
+    const entradas = (content || []).filter((h) => h?.id);
+
+    // Os destaques misturam anúncios (ITEM) e produtos de catálogo (PRODUCT).
+    // Descartar os PRODUCT zerava categorias inteiras, então cada tipo segue
+    // pelo caminho que lhe corresponde.
+    const ehItem = (h) => !h.type || h.type.toUpperCase() === 'ITEM';
+    const idsItem = entradas.filter(ehItem).map((h) => h.id);
+    const idsProduto = entradas.filter((h) => !ehItem(h)).map((h) => h.id);
+
+    const lista = [];
+    if (idsItem.length) lista.push(...await itens(idsItem, aoProgredir));
+    let naoResolvidos = [];
+    if (idsProduto.length) {
+      const prods = await produtosPorId(idsProduto);
+      naoResolvidos = prods.naoResolvidos || [];
+      lista.push(...prods);
+      aoProgredir?.(lista.length, entradas.length);
+    }
+
     // Os destaques já vêm em ordem de relevância de vendas: preserva-a para os
     // itens cuja quantidade vendida a API não informar.
-    const posicao = new Map(ids.map((id, i) => [id, i]));
+    const posicao = new Map(entradas.map((h, i) => [h.id, i]));
     lista.forEach((it) => { it.posicao_destaque = posicao.get(it.id) ?? 999; });
+    lista.sort((a, b) => a.posicao_destaque - b.posicao_destaque);
+
+    if (!lista.length && entradas.length) {
+      throw new Error(
+        `Os ${entradas.length} destaques desta categoria são produtos de catálogo, ` +
+        'e a API recusou a leitura deles para esta aplicação. Tente outra categoria.'
+      );
+    }
+
+    lista.totalDestaques = entradas.length;
+    lista.naoResolvidos = naoResolvidos.length;
+    lista.tipos = `${idsItem.length} anúncios, ${idsProduto.length} produtos de catálogo`;
     return lista;
   }
 
@@ -345,6 +415,7 @@ window.ML = (() => {
   return {
     creds, tokens, ErroRede, PrecisaLogin, trocarCode, tokenValido, iniciarLogin,
     categorias, maisVendidos, buscar, catalogo, enriquecer, linkAfiliado, REDIRECT,
+    historico: () => historico.slice(),
     conectado: () => !!tokens.obter()
   };
 })();

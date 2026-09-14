@@ -12,9 +12,12 @@ function msg(html, tipo = '') {
 }
 
 function detalhes() {
-  const t = window.ML_TENTATIVAS;
-  return t?.length
-    ? `<details><summary>Detalhes técnicos</summary><pre>${esc(t.join('\n'))}</pre></details>`
+  const partes = [];
+  if (window.ML_TENTATIVAS?.length) partes.push(window.ML_TENTATIVAS.join('\n'));
+  const h = ML.historico?.() || [];
+  if (h.length) partes.push('\nChamadas à API:\n' + h.join('\n'));
+  return partes.length
+    ? `<details><summary>Detalhes técnicos</summary><pre>${esc(partes.join('\n'))}</pre></details>`
     : '';
 }
 
@@ -109,7 +112,9 @@ async function carregarProdutos({ propagar = false } = {}) {
         tentativas.push(`${nome}: vazio`);
       } catch (err) {
         tentativas.push(`${nome}: ${err.message}`);
-        ultimo = err;
+        // A primeira fonte é a principal: o erro dela explica melhor o que
+        // houve do que o da reserva, então não deixamos ser sobrescrito.
+        ultimo = ultimo || err;
         if (err instanceof ML.ErroRede) throw err;
       }
     }
@@ -136,8 +141,13 @@ async function carregarProdutos({ propagar = false } = {}) {
       return (a.posicao_destaque ?? 999) - (b.posicao_destaque ?? 999);
     });
 
+    if (lista.naoResolvidos) {
+      nota = (nota ? nota + ' ' : '') +
+        `${lista.naoResolvidos} de ${lista.totalDestaques} destaques não puderam ` +
+        'ser lidos (produtos de catálogo negados pela API).';
+    }
     todos = lista;
-    $('fonte').textContent = `via ${usada}`;
+    $('fonte').textContent = `via ${usada}${lista.tipos ? ` — ${lista.tipos}` : ''}`;
     msg(nota, nota ? 'err' : '');
     aplicarFiltro();
   } catch (err) {
