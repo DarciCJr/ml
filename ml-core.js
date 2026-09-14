@@ -65,15 +65,35 @@ window.ML = (() => {
     return resp;
   }
 
+  /**
+   * Sessão expirada e sem como renovar sozinho: a única saída é reconectar.
+   * Distinta de PrecisaLogin (nunca chegou a logar) porque aqui já houve
+   * conexão — o usuário só precisa autorizar de novo, sem retypar credenciais.
+   */
+  class SessaoExpirada extends Error {}
+
   async function renovar() {
     const c = creds.obter(), t = tokens.obter();
-    if (!c || !t?.refresh_token) throw new Error('sem refresh_token');
-    const resp = await postForm('/oauth/token', {
-      grant_type: 'refresh_token',
-      client_id: c.clientId,
-      client_secret: c.clientSecret,
-      refresh_token: t.refresh_token
-    });
+    if (!c || !t?.refresh_token) {
+      tokens.limpar();
+      throw new SessaoExpirada(
+        'Sua conexão expirou e não há como renovar automaticamente ' +
+        '(a aplicação pode não ter "acesso offline" habilitado no painel do ' +
+        'Mercado Livre). Conecte de novo — é rápido, as credenciais continuam salvas.'
+      );
+    }
+    let resp;
+    try {
+      resp = await postForm('/oauth/token', {
+        grant_type: 'refresh_token',
+        client_id: c.clientId,
+        client_secret: c.clientSecret,
+        refresh_token: t.refresh_token
+      });
+    } catch (err) {
+      tokens.limpar();
+      throw new SessaoExpirada(`Não foi possível renovar a conexão (${err.message}). Conecte de novo.`);
+    }
     tokens.salvar(resp);
     return resp.access_token;
   }
@@ -81,7 +101,7 @@ window.ML = (() => {
   /** Devolve um access_token válido, renovando se preciso. */
   async function tokenValido() {
     const t = tokens.obter();
-    if (!t) throw new Error('desconectado');
+    if (!t) throw new SessaoExpirada('desconectado');
     if (Date.now() + MARGEM >= t.expires_at) return renovar();
     return t.access_token;
   }
@@ -548,7 +568,7 @@ window.ML = (() => {
   }
 
   return {
-    creds, tokens, ErroRede, PrecisaLogin, trocarCode, tokenValido, iniciarLogin,
+    creds, tokens, ErroRede, PrecisaLogin, SessaoExpirada, trocarCode, tokenValido, iniciarLogin,
     categorias, maisVendidos, buscar, catalogo, enriquecer,
     linkSalvo, salvarLink, loja, naLoja, alternarLoja,
     estoqueTexto, REDIRECT,

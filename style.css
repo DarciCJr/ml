@@ -204,3 +204,22 @@ details pre { margin-top: 8px; font-size: .75rem; }
 }
 .botaolink:hover { filter: brightness(1.08); }
 #vazio { text-align: center; color: var(--muted); }
+
+/* ---- Loja em lista ---- */
+.loja-tabela { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.loja-linha {
+  display: grid; grid-template-columns: 28px 44px 1fr auto auto;
+  align-items: center; gap: 12px; padding: 10px 4px;
+  border-bottom: 1px solid var(--line); text-decoration: none; color: var(--fg);
+}
+.loja-linha:hover { background: var(--card); }
+.loja-pos { color: var(--muted); font-size: .8rem; text-align: right; }
+.loja-linha img { width: 44px; height: 44px; object-fit: contain; border-radius: 6px; background: #fff; }
+.loja-titulo { font-size: .9rem; min-width: 0; }
+.loja-preco { font-size: .9rem; white-space: nowrap; text-align: right; }
+.loja-preco s { color: var(--muted); font-size: .78rem; display: block; }
+.loja-linha .botaolink { margin: 0; padding: 6px 12px; font-size: .78rem; }
+@media (max-width: 560px) {
+  .loja-linha { grid-template-columns: 24px 40px 1fr; grid-template-areas: "pos img titulo" "pos img preco" "pos img acao"; row-gap: 2px; }
+  .loja-linha .botaolink { justify-self: start; }
+}

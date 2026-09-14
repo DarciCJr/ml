@@ -11,21 +11,22 @@ function render(produtos) {
     document.getElementById('vazio').hidden = false;
     return;
   }
-  document.getElementById('lista').innerHTML = produtos.map((p) => {
-    const temDesconto = p.original_price && p.original_price > p.price;
-    return `
-      <div class="card">
-        <img src="${esc(p.thumbnail || '')}" alt="" loading="lazy">
-        <div class="card-corpo">
-          <a class="titulo" href="${esc(p.link || '#')}" target="_blank" rel="noopener sponsored">${esc(p.title)}</a>
-          <div class="preco">${p.price != null ? brl(p.price) : ''}
-            ${temDesconto ? `<span class="desconto">-${Math.round((1 - p.price / p.original_price) * 100)}%</span>
-              <s>${brl(p.original_price)}</s>` : ''}
-          </div>
-          <a class="botaolink" href="${esc(p.link || '#')}" target="_blank" rel="noopener sponsored">Ver oferta</a>
-        </div>
-      </div>`;
-  }).join('');
+  document.getElementById('lista').innerHTML = `
+    <div class="loja-tabela">
+      ${produtos.map((p, i) => {
+        const temDesconto = p.original_price && p.original_price > p.price;
+        return `
+          <a class="loja-linha" href="${esc(p.link || '#')}" target="_blank" rel="noopener sponsored">
+            <span class="loja-pos">${i + 1}</span>
+            <img src="${esc(p.thumbnail || '')}" alt="" loading="lazy">
+            <span class="loja-titulo">${esc(p.title)}</span>
+            <span class="loja-preco">${p.price != null ? brl(p.price) : '—'}
+              ${temDesconto ? `<s>${brl(p.original_price)}</s>` : ''}
+            </span>
+            <span class="botaolink">Ver oferta</span>
+          </a>`;
+      }).join('')}
+    </div>`;
 }
 
 (async () => {

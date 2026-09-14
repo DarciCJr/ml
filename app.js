@@ -105,18 +105,47 @@ function atualizarContagemLoja() {
   $('lojaContagem').textContent = ML.loja().length;
 }
 
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Varre todas as categorias raiz e junta os mais vendidos de cada uma. */
+async function todasAsCategorias() {
+  const cats = window.ML_CATEGORIAS || [];
+  const combinado = [];
+  const vistos = new Set();
+  let falhas = 0;
+
+  for (let i = 0; i < cats.length; i++) {
+    msg(`Varrendo categorias… ${i + 1}/${cats.length} (${cats[i].name})`);
+    try {
+      const r = await ML.maisVendidos(cats[i].id);
+      for (const p of r) {
+        if (!vistos.has(p.id)) { combinado.push({ ...p, categoria_nome: cats[i].name }); vistos.add(p.id); }
+      }
+    } catch {
+      falhas++;   // uma categoria negada não deve travar as outras
+    }
+    await dormir(150);   // gentil com o rate limit — 30 categorias já são ~30 chamadas
+  }
+
+  combinado.motivoFalha = falhas ? `${falhas} categoria(s) não responderam` : null;
+  return combinado;
+}
+
 async function carregarProdutos({ propagar = false } = {}) {
   const cat = $('categoria').value;
   const nomeCat = $('categoria').selectedOptions[0]?.textContent?.trim() || '';
+  const todasCategorias = cat === '__todas__';
   msg('Carregando os mais vendidos…');
   try {
     // A busca (/sites/MLB/search) é negada para esta aplicação; os destaques
     // são a fonte boa, e o catálogo fica como reserva.
-    const fontes = [
-      ['mais vendidos', () => ML.maisVendidos(cat, (f, t) =>
-        msg(`Carregando os mais vendidos… ${f}/${t}`))],
-      ['catálogo', () => ML.catalogo('', cat, nomeCat)]
-    ];
+    const fontes = todasCategorias
+      ? [['mais vendidos', () => todasAsCategorias()]]
+      : [
+          ['mais vendidos', () => ML.maisVendidos(cat, (f, t) =>
+            msg(`Carregando os mais vendidos… ${f}/${t}`))],
+          ['catálogo', () => ML.catalogo('', cat, nomeCat)]
+        ];
 
     let lista = null, usada = null, ultimo = null;
     const tentativas = [];
@@ -139,7 +168,7 @@ async function carregarProdutos({ propagar = false } = {}) {
     // Os mais vendidos costumam trazer poucas dezenas de itens. Se sobrar
     // espaço, completa com o catálogo da mesma categoria, sem repetir id.
     const ALVO = 40;
-    if (usada === 'mais vendidos' && lista.length < ALVO) {
+    if (usada === 'mais vendidos' && !todasCategorias && lista.length < ALVO) {
       try {
         const extra = await ML.catalogo('', cat, nomeCat);
         const vistos = new Set(lista.map((x) => x.id));
@@ -151,7 +180,7 @@ async function carregarProdutos({ propagar = false } = {}) {
     }
 
     // O catálogo vem sem preço nem vendas: completa item a item.
-    let nota = '';
+    let nota = lista.motivoFalha ? `${lista.motivoFalha}. ` : '';
     if (lista.some((x) => x.price == null || x.sold_quantity == null)) {
       lista = await ML.enriquecer(lista, (f, t) => msg(`Carregando preços e vendas… ${f}/${t}`));
       const incompletos = lista.filter((x) => x.price == null).length;
@@ -170,6 +199,15 @@ async function carregarProdutos({ propagar = false } = {}) {
       return (a.posicao_destaque ?? 999) - (b.posicao_destaque ?? 999);
     });
 
+    // "Todas as categorias" pode juntar centenas de produtos; corta no topo
+    // do ranking para a lista continuar utilizável.
+    const TETO_TODAS = 300;
+    if (todasCategorias && lista.length > TETO_TODAS) {
+      nota = (nota ? nota + ' ' : '') +
+        `Mostrando os ${TETO_TODAS} mais vendidos de ${lista.length} encontrados.`;
+      lista = lista.slice(0, TETO_TODAS);
+    }
+
     if (lista.naoResolvidos) {
       nota = (nota ? nota + ' ' : '') +
         `${lista.naoResolvidos} de ${lista.totalDestaques} destaques não puderam ` +
@@ -180,7 +218,7 @@ async function carregarProdutos({ propagar = false } = {}) {
     msg(nota, nota ? 'err' : '');
     aplicarFiltro();
   } catch (err) {
-    if (propagar || err instanceof ML.PrecisaLogin) throw err;
+    if (propagar || err instanceof ML.PrecisaLogin || err instanceof ML.SessaoExpirada) throw err;
     msg(explicar(err) + detalhes(), 'err');
   }
 }
@@ -199,15 +237,17 @@ async function carregarCategorias({ propagar = false } = {}) {
   const sel = $('categoria');
   try {
     const cats = await ML.categorias();
+    window.ML_CATEGORIAS = cats;
     const salva = localStorage.getItem('ml_categoria');
-    sel.innerHTML = cats.map((c) =>
-      `<option value="${esc(c.id)}"${c.id === salva ? ' selected' : ''}>${esc(c.name)}</option>`
-    ).join('');
-    if (!salva) sel.value = cats[0].id;
+    sel.innerHTML = '<option value="__todas__">Todas as categorias</option>' +
+      cats.map((c) =>
+        `<option value="${esc(c.id)}"${c.id === salva ? ' selected' : ''}>${esc(c.name)}</option>`
+      ).join('');
+    if (salva) sel.value = salva; else sel.value = '__todas__';
     return true;
   } catch (err) {
     sel.innerHTML = '<option>—</option>';
-    if (propagar || err instanceof ML.PrecisaLogin) throw err;
+    if (propagar || err instanceof ML.PrecisaLogin || err instanceof ML.SessaoExpirada) throw err;
     msg(explicar(err), 'err');
     return false;
   }
@@ -225,6 +265,14 @@ async function iniciar() {
     await carregarCategorias(propagar);
     await carregarProdutos(propagar);
   } catch (err) {
+    if (err instanceof ML.SessaoExpirada) {
+      // tokens.limpar() já rodou dentro de renovar(): reconectar não pede
+      // credenciais de novo, só uma nova autorização.
+      pintarConta();
+      mostrarEtapa('conectar');
+      msg(esc(err.message), 'err');
+      return;
+    }
     if (!ML.conectado()) {
       // A API do ML hoje exige token em praticamente tudo: leve ao login,
       // mostrando o motivo real em vez de deixar a tela vazia.
