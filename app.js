@@ -50,8 +50,7 @@ function pintarConta() {
     const c = ML.creds.obter() || {};
     $('clientId').value = c.clientId || '';
     $('clientSecret').value = c.clientSecret || '';
-    $('afiliado').value = c.afiliado || '';
-    $('modeloAfiliado').value = c.modeloAfiliado || '';
+
     mostrarEtapa('setup');
   });
 }
@@ -64,7 +63,7 @@ function render(lista) {
     ? `${lista.length} de ${todos.length} produtos`
     : `${lista.length} produto${lista.length === 1 ? '' : 's'}`;
   $('lista').innerHTML = lista.map((it, i) => {
-    const link = ML.linkAfiliado(it.permalink);
+    const linkAfiliado = ML.linkSalvo(it.id);
     const temDesconto = it.original_price && it.original_price > it.price;
     const semDados = it.price == null;
     return `
@@ -72,7 +71,7 @@ function render(lista) {
         <span class="posicao">${i + 1}</span>
         <img src="${esc(it.secure_thumbnail || it.thumbnail || '')}" alt="" loading="lazy">
         <div class="card-corpo">
-          <a class="titulo" href="${esc(link)}" target="_blank" rel="noopener">${esc(it.title)}</a>
+          <a class="titulo" href="${esc(it.permalink)}" target="_blank" rel="noopener">${esc(it.title)}</a>
           <div class="preco">${semDados ? '<span class="sem-dado">preço não informado</span>' : brl(it.price)}
             ${temDesconto ? `<span class="desconto">-${Math.round((1 - it.price / it.original_price) * 100)}%</span>
               <s>${brl(it.original_price)}</s>` : ''}
@@ -82,9 +81,14 @@ function render(lista) {
             ${it.available_quantity != null ? ` · estoque ${ML.estoqueTexto(it.available_quantity)}` : ''}
             ${it.shipping?.free_shipping ? ' · frete grátis' : ''}
           </div>
-          <div class="link-linha">
-            <input readonly value="${esc(link)}">
-            <button class="secundario copiar" data-link="${esc(link)}">Copiar</button>
+          <div class="afiliado-linha">
+            <a class="abrir-produto" href="${esc(it.permalink)}" target="_blank" rel="noopener">Abrir no ML &rarr;</a>
+            <input class="link-afiliado" data-id="${esc(it.id)}"
+              placeholder="cole aqui o link meli.la deste produto"
+              value="${esc(linkAfiliado || '')}">
+            ${linkAfiliado
+              ? '<button class="secundario copiar" data-link="' + esc(linkAfiliado) + '">Copiar</button>'
+              : '<span class="pendente">sem link</span>'}
           </div>
         </div>
       </div>`;
@@ -146,11 +150,6 @@ async function carregarProdutos({ propagar = false } = {}) {
       nota = (nota ? nota + ' ' : '') +
         `${lista.naoResolvidos} de ${lista.totalDestaques} destaques não puderam ` +
         'ser lidos (produtos de catálogo negados pela API).';
-    }
-    if (ML.formatoAfiliadoSuposto()) {
-      nota = (nota ? nota + ' ' : '') +
-        'Atenção: o formato do link de afiliado é uma suposição (matt_tool) e ' +
-        'pode não creditar sua comissão. Cole um link real em "credenciais".';
     }
     todos = lista;
     $('fonte').textContent = `via ${usada}${lista.tipos ? ` — ${lista.tipos}` : ''}`;
@@ -218,11 +217,7 @@ $('btnSalvarCreds').addEventListener('click', async () => {
   const clientId = $('clientId').value.trim();
   const clientSecret = $('clientSecret').value.trim();
   if (!clientId || !clientSecret) return msg('Preencha o App ID e a Secret Key.', 'err');
-  ML.creds.salvar({
-    clientId, clientSecret,
-    afiliado: $('afiliado').value.trim(),
-    modeloAfiliado: $('modeloAfiliado').value.trim()
-  });
+  ML.creds.salvar({ clientId, clientSecret });
   if (ML.conectado()) { msg(''); return iniciar(); }
   try { await ML.iniciarLogin(); } catch (err) { msg(explicar(err), 'err'); }
 });
@@ -241,15 +236,21 @@ $('categoria').addEventListener('change', () => {
 $('filtro').addEventListener('input', aplicarFiltro);
 
 $('btnCopiarLinks').addEventListener('click', () => {
-  navigator.clipboard.writeText(produtos.map((p) => ML.linkAfiliado(p.permalink)).join('\n'));
+  const comLink = produtos.map((p) => ML.linkSalvo(p.id)).filter(Boolean);
+  if (!comLink.length) {
+    return msg('Nenhum produto tem link de afiliado colado ainda.', 'err');
+  }
+  navigator.clipboard.writeText(comLink.join('\n'));
+  const faltando = produtos.length - comLink.length;
+  if (faltando) msg(`Copiados ${comLink.length} links. ${faltando} produtos ainda sem link de afiliado.`);
 });
 
 $('btnCsv').addEventListener('click', () => {
   const campo = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const linhas = [['id', 'titulo', 'preco', 'vendidos', 'estoque', 'link'].map(campo).join(',')];
+  const linhas = [['id', 'titulo', 'preco', 'vendidos', 'estoque', 'link_produto', 'link_afiliado'].map(campo).join(',')];
   for (const p of produtos) {
     linhas.push([p.id, p.title, p.price, p.sold_quantity, p.available_quantity,
-      ML.linkAfiliado(p.permalink)].map(campo).join(','));
+      p.permalink, ML.linkSalvo(p.id) || ''].map(campo).join(','));
   }
   const url = URL.createObjectURL(new Blob(['﻿' + linhas.join('\n')],
     { type: 'text/csv;charset=utf-8' }));
@@ -265,6 +266,31 @@ document.addEventListener('click', (e) => {
     b.textContent = 'Copiado!';
     setTimeout(() => { b.textContent = 'Copiar'; }, 1200);
   });
+});
+
+// Guarda o link de afiliado assim que o usuário cola/edita, e atualiza
+// o botão de copiar daquele card sem recarregar a lista inteira.
+$('lista').addEventListener('change', (e) => {
+  const input = e.target.closest('.link-afiliado');
+  if (!input) return;
+  const id = input.dataset.id;
+  const link = input.value.trim();
+  ML.salvarLink(id, link);
+
+  const linha = input.closest('.afiliado-linha');
+  const antigo = linha.querySelector('.copiar, .pendente');
+  if (link) {
+    const btn = document.createElement('button');
+    btn.className = 'secundario copiar';
+    btn.dataset.link = link;
+    btn.textContent = 'Copiar';
+    antigo.replaceWith(btn);
+  } else {
+    const span = document.createElement('span');
+    span.className = 'pendente';
+    span.textContent = 'sem link';
+    antigo.replaceWith(span);
+  }
 });
 
 iniciar();

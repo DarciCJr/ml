@@ -180,3 +180,14 @@ details pre { margin-top: 8px; font-size: .75rem; }
   .acoes { width: 100%; }
   .filtro { flex: 1; width: auto; }
 }
+
+/* ---- Link de afiliado por produto ---- */
+.afiliado-linha {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px;
+}
+.abrir-produto { font-size: .78rem; white-space: nowrap; }
+.link-afiliado {
+  flex: 1; min-width: 140px; font-size: .75rem; padding: 5px 8px;
+}
+.afiliado-linha .copiar { padding: 5px 10px; font-size: .78rem; margin: 0; }
+.pendente { color: var(--muted); font-size: .78rem; white-space: nowrap; }

@@ -495,44 +495,31 @@ window.ML = (() => {
   }
 
   /**
-   * Monta o link de afiliado. O formato correto é definido pelo programa de
-   * Afiliados, não pela API, então preferimos copiar os parâmetros de um link
-   * real que o usuário tenha gerado — assim não dependemos de suposição.
+   * O link de afiliado do Mercado Livre é um encurtador exclusivo por produto
+   * (ex.: meli.la/2dhVmAc), gerado pelo botão "Compartilhar para ganhar
+   * dinheiro" na própria página do produto. Não existe parâmetro para colar
+   * na URL nem padrão para reconstruir — cada link só existe porque alguém
+   * clicou naquele botão, naquele produto. Por isso não é gerado aqui: fica
+   * guardado o que o usuário colar, por produto.
    */
-  function linkAfiliado(permalink) {
-    if (!permalink) return '';
-    const c = creds.obter() || {};
+  const LINKS = 'ml_links_afiliado';
+  const linksSalvos = () => ler(LINKS) || {};
 
-    const modelo = (c.modeloAfiliado || '').trim();
-    if (modelo) {
-      try {
-        const m = new URL(modelo);
-        const u = new URL(permalink);
-        // Só os parâmetros de rastreio interessam; o caminho é do produto.
-        m.searchParams.forEach((v, k) => u.searchParams.set(k, v));
-        return u.toString();
-      } catch { /* modelo inválido: cai no identificador solto */ }
-    }
-
-    const id = (c.afiliado || '').trim();
-    if (!id) return permalink;
-    try {
-      const u = new URL(permalink);
-      u.searchParams.set('matt_tool', id);
-      return u.toString();
-    } catch { return permalink; }
+  function linkSalvo(id) {
+    return linksSalvos()[id] || null;
   }
 
-  /** Diz se o link está sendo montado por suposição nossa. */
-  function formatoAfiliadoSuposto() {
-    const c = creds.obter() || {};
-    return !((c.modeloAfiliado || '').trim()) && !!(c.afiliado || '').trim();
+  function salvarLink(id, link) {
+    const atual = linksSalvos();
+    if (link) atual[id] = link; else delete atual[id];
+    gravar(LINKS, atual);
   }
 
   return {
     creds, tokens, ErroRede, PrecisaLogin, trocarCode, tokenValido, iniciarLogin,
-    categorias, maisVendidos, buscar, catalogo, enriquecer, linkAfiliado,
-    estoqueTexto, formatoAfiliadoSuposto, REDIRECT,
+    categorias, maisVendidos, buscar, catalogo, enriquecer,
+    linkSalvo, salvarLink,
+    estoqueTexto, REDIRECT,
     historico: () => historico.slice(),
     conectado: () => !!tokens.obter()
   };
