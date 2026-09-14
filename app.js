@@ -90,9 +90,19 @@ function render(lista) {
               ? '<button class="secundario copiar" data-link="' + esc(linkAfiliado) + '">Copiar</button>'
               : '<span class="pendente">sem link</span>'}
           </div>
+          <label class="check compacto na-loja">
+            <input type="checkbox" class="toggle-loja" data-id="${esc(it.id)}"
+              ${linkAfiliado ? '' : 'disabled'} ${ML.naLoja(it.id) ? 'checked' : ''}>
+            + loja${linkAfiliado ? '' : ' (cole o link primeiro)'}
+          </label>
         </div>
       </div>`;
   }).join('');
+  atualizarContagemLoja();
+}
+
+function atualizarContagemLoja() {
+  $('lojaContagem').textContent = ML.loja().length;
 }
 
 async function carregarProdutos({ propagar = false } = {}) {
@@ -125,6 +135,20 @@ async function carregarProdutos({ propagar = false } = {}) {
     }
     window.ML_TENTATIVAS = tentativas;
     if (!lista) throw ultimo || new Error('Nenhuma fonte de produtos respondeu.');
+
+    // Os mais vendidos costumam trazer poucas dezenas de itens. Se sobrar
+    // espaço, completa com o catálogo da mesma categoria, sem repetir id.
+    const ALVO = 40;
+    if (usada === 'mais vendidos' && lista.length < ALVO) {
+      try {
+        const extra = await ML.catalogo('', cat, nomeCat);
+        const vistos = new Set(lista.map((x) => x.id));
+        for (const p of extra) {
+          if (lista.length >= ALVO) break;
+          if (!vistos.has(p.id)) { lista.push(p); vistos.add(p.id); }
+        }
+      } catch { /* sem catálogo extra, segue só com os destaques */ }
+    }
 
     // O catálogo vem sem preço nem vendas: completa item a item.
     let nota = '';
@@ -164,9 +188,10 @@ async function carregarProdutos({ propagar = false } = {}) {
 /** Filtro local: a busca da API é negada, então filtramos o que já carregou. */
 function aplicarFiltro() {
   const termo = $('filtro').value.trim().toLowerCase();
-  const vis = termo
+  let vis = termo
     ? todos.filter((p) => (p.title || '').toLowerCase().includes(termo))
     : todos;
+  if ($('ocultarSemPreco').checked) vis = vis.filter((p) => p.price != null);
   render(vis);
 }
 
@@ -234,6 +259,7 @@ $('categoria').addEventListener('change', () => {
 });
 
 $('filtro').addEventListener('input', aplicarFiltro);
+$('ocultarSemPreco').addEventListener('change', aplicarFiltro);
 
 $('btnCopiarLinks').addEventListener('click', () => {
   const comLink = produtos.map((p) => ML.linkSalvo(p.id)).filter(Boolean);
@@ -272,24 +298,59 @@ document.addEventListener('click', (e) => {
 // o botão de copiar daquele card sem recarregar a lista inteira.
 $('lista').addEventListener('change', (e) => {
   const input = e.target.closest('.link-afiliado');
-  if (!input) return;
-  const id = input.dataset.id;
-  const link = input.value.trim();
-  ML.salvarLink(id, link);
+  if (input) {
+    const id = input.dataset.id;
+    const link = input.value.trim();
+    ML.salvarLink(id, link);
 
-  const linha = input.closest('.afiliado-linha');
-  const antigo = linha.querySelector('.copiar, .pendente');
-  if (link) {
-    const btn = document.createElement('button');
-    btn.className = 'secundario copiar';
-    btn.dataset.link = link;
-    btn.textContent = 'Copiar';
-    antigo.replaceWith(btn);
-  } else {
-    const span = document.createElement('span');
-    span.className = 'pendente';
-    span.textContent = 'sem link';
-    antigo.replaceWith(span);
+    const linha = input.closest('.afiliado-linha');
+    const antigo = linha.querySelector('.copiar, .pendente');
+    if (link) {
+      const btn = document.createElement('button');
+      btn.className = 'secundario copiar';
+      btn.dataset.link = link;
+      btn.textContent = 'Copiar';
+      antigo.replaceWith(btn);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'pendente';
+      span.textContent = 'sem link';
+      antigo.replaceWith(span);
+    }
+
+    // Sem link não faz sentido continuar na loja.
+    const chk = linha.parentElement.querySelector('.toggle-loja');
+    if (chk) {
+      chk.disabled = !link;
+      if (!link && chk.checked) {
+        chk.checked = false;
+        const produto = produtos.find((p) => p.id === id);
+        if (produto) { ML.alternarLoja(produto, false); atualizarContagemLoja(); }
+      }
+    }
+    return;
+  }
+
+  const toggle = e.target.closest('.toggle-loja');
+  if (toggle) {
+    const produto = produtos.find((p) => p.id === toggle.dataset.id);
+    if (produto) {
+      ML.alternarLoja(produto, toggle.checked);
+      atualizarContagemLoja();
+    }
+  }
+});
+
+$('btnExportarLoja').addEventListener('click', async () => {
+  const dados = ML.loja();
+  if (!dados.length) return msg('A loja está vazia. Marque "+ loja" em algum produto antes.', 'err');
+  const json = JSON.stringify(dados, null, 2);
+  try {
+    await navigator.clipboard.writeText(json);
+    msg(`Copiado! ${dados.length} produto(s). Cole no chat para eu publicar a loja.`);
+  } catch {
+    // Sem permissão de clipboard: mostra pra copiar na mão.
+    msg(`<textarea readonly style="width:100%;height:120px">${esc(json)}</textarea>`);
   }
 });
 

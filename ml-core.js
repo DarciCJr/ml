@@ -515,10 +515,42 @@ window.ML = (() => {
     gravar(LINKS, atual);
   }
 
+  /**
+   * Loja: produtos escolhidos para publicar numa página pública própria
+   * (loja.html). Guardados neste navegador; "exportar" gera o JSON que vira
+   * o arquivo publicado — o GitHub Pages é estático e não tem banco de dados,
+   * então a publicação de verdade passa por essa exportação manual.
+   */
+  const LOJA = 'ml_loja';
+
+  function loja() {
+    return ler(LOJA) || [];
+  }
+
+  function naLoja(id) {
+    return loja().some((p) => p.id === id);
+  }
+
+  function alternarLoja(produto, incluir) {
+    const atual = loja().filter((p) => p.id !== produto.id);
+    if (incluir) {
+      atual.push({
+        id: produto.id,
+        title: produto.title,
+        price: produto.price,
+        original_price: produto.original_price ?? null,
+        thumbnail: produto.secure_thumbnail || produto.thumbnail || '',
+        link: linkSalvo(produto.id)
+      });
+    }
+    gravar(LOJA, atual);
+    return atual;
+  }
+
   return {
     creds, tokens, ErroRede, PrecisaLogin, trocarCode, tokenValido, iniciarLogin,
     categorias, maisVendidos, buscar, catalogo, enriquecer,
-    linkSalvo, salvarLink,
+    linkSalvo, salvarLink, loja, naLoja, alternarLoja,
     estoqueTexto, REDIRECT,
     historico: () => historico.slice(),
     conectado: () => !!tokens.obter()

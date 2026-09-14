@@ -191,3 +191,16 @@ details pre { margin-top: 8px; font-size: .75rem; }
 }
 .afiliado-linha .copiar { padding: 5px 10px; font-size: .78rem; margin: 0; }
 .pendente { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+
+/* ---- Loja pública / gerenciamento da loja ---- */
+.check.compacto { font-size: .78rem; white-space: nowrap; gap: 4px; }
+.na-loja { margin-top: 6px; }
+.loja-resumo { margin-top: 24px; }
+.loja-resumo .acoes { margin-top: 8px; }
+.botaolink {
+  display: inline-block; background: var(--accent); color: #fff;
+  padding: 8px 16px; border-radius: 8px; text-decoration: none;
+  font-size: .85rem; margin-top: 8px;
+}
+.botaolink:hover { filter: brightness(1.08); }
+#vazio { text-align: center; color: var(--muted); }
